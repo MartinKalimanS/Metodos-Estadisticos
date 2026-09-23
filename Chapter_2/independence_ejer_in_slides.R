@@ -1,6 +1,6 @@
-data <- c(1, 3, 2, 4,
-          3, 9, 6, 12,
-          2, 6, 4, 8)
+data <- c(3, 4, 3,
+          1, 0, 1,
+          2, 2, 2)
 
 tabla <- matrix(data, nrow = 3, byrow = TRUE)
 
@@ -25,7 +25,7 @@ print(expected)
 
 
 if(isTRUE(all.equal(relative_freq, expected))) {
-  print("Si es independiente")
+  print("They are independent and uncorrelated")
 } else {
   print("No es independiente")
 }
