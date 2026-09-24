@@ -17,3 +17,10 @@ print(table)
 
 table$ralative_freq <- table$absolute_freq / l
 print(table)
+
+barplot(table$ralative_freq,
+        names.arg = "skyblue",
+        main = " Relative frequencies",
+        xlab = "data values",
+        ylab = "Relative frequency")
+
