@@ -1,6 +1,3 @@
-# --- Al principio de formulas_chapter2.R ---
-# source(here::here("chapter_2", "formulas_chapter2.R"))
-
 # =============================================================================
 #  CHAPTER 2 - STATISTICAL MODELLING (bivariate data, regression, correlation)
 #  One R function for every formula / concept in the Chapter 2 slides.
@@ -66,12 +63,42 @@
 #       fit_power, predict_power
 #  6. MULTIPLE LINEAR REGRESSION
 #       multiple_regression, predict_multiple, polynomial_regression
+#  7. GRAPHS
+#       plot_regression_lines
 # =============================================================================
 
 if (!exists("arithmetic_mean") || !exists("variance") || !exists("standard_deviation")) {
   stop("Chapter 2 needs Chapter 1's functions. Run this first:\n",
        '  source("chapter1_descriptive_stats.R")\n',
        "and only then source this Chapter 2 file.")
+}
+
+# -----------------------------------------------------------------------------
+# print.stat_fit(x, ...)     [you never call this yourself]
+# -----------------------------------------------------------------------------
+# WHAT IT DOES : Every fitting function in this file (regression_y_on_x(),
+#                regression_x_on_y(), fit_exponential(), fit_hyperbolic(),
+#                fit_power()) returns a small list tagged as a "stat_fit".
+#                This teaches R how to print that list in a readable way —
+#                instead of just dumping $a and $b with no context, it shows
+#                what was fitted and the equation with the numbers filled
+#                in. It runs AUTOMATICALLY whenever you print one of those
+#                results (by typing the model's name, or not assigning the
+#                function's result to anything) — you never call it by hand.
+# EXAMPLE      :
+#   regression_y_on_x(c(1,2,3,4,5), c(1,1,2,2,4))
+#   # Regression line R_Y/X (predicts Y from X)
+#   #   y = 0.4000 + 0.7000 * x
+#   #   intercept (a) = 0.4000
+#   #   slope     (b) = 0.7000
+# -----------------------------------------------------------------------------
+print.stat_fit <- function(x, ...) {
+  labels <- if (!is.null(x$labels)) x$labels else c("a", "b")
+  cat(x$description, "\n")
+  cat("  ", x$equation, "\n\n", sep = "")
+  cat(sprintf("  %-14s= %.4f\n", labels[1], x$a))
+  cat(sprintf("  %-14s= %.4f\n", labels[2], x$b))
+  invisible(x)
 }
 
 
@@ -409,17 +436,33 @@ covariance_shortcut <- function(x, y, n = NULL) {
 #   x : the X value of each pair (the predictor).
 #   y : the Y value of each pair (the variable to predict).
 #   n : (optional) how many times each pair appears.
-# RETURNS      : A list with $a (the intercept) and $b (the slope). The
-#                line always passes through (mean of X, mean of Y).
+# RETURNS      : A list you can print directly to see a readable summary
+#                (it prints as "Regression line R_Y/X ... y = a + b*x" with
+#                a and b filled in). It has:
+#                  $a         — the intercept.
+#                  $b         — the slope: how much Y changes per one-unit
+#                               increase in X. This is usually the number
+#                               that matters for interpretation.
+#                  $intercept — the same value as $a, under a clearer name.
+#                  $slope     — the same value as $b, under a clearer name.
+#                  $equation  — the fitted line as readable text, e.g.
+#                               "y = -107.8202 + 1.0161 * x".
+#                The line always passes through (mean of X, mean of Y).
 # EXAMPLE      :
 #   model <- regression_y_on_x(c(1,2,3,4,5), c(1,1,2,2,4))
-#   model$a; model$b
+#   model                      # prints a readable summary
+#   model$slope                # 0.9 (just the number you usually want)
 #   predict_linear(model$a, model$b, x_new = 6)
 # -----------------------------------------------------------------------------
 regression_y_on_x <- function(x, y, n = NULL) {
   b <- covariance(x, y, n) / variance(x, n)
   a <- arithmetic_mean(y, n) - b * arithmetic_mean(x, n)
-  list(a = a, b = b)
+  structure(list(
+    a = a, b = b, intercept = a, slope = b,
+    equation = sprintf("y = %.4f + %.4f * x", a, b),
+    description = "Regression line R_Y/X (predicts Y from X)",
+    labels = c("intercept (a)", "slope     (b)")
+  ), class = "stat_fit")
 }
 
 # -----------------------------------------------------------------------------
@@ -436,17 +479,31 @@ regression_y_on_x <- function(x, y, n = NULL) {
 #   x : the X value of each pair (the variable to predict here).
 #   y : the Y value of each pair (the predictor here).
 #   n : (optional) how many times each pair appears.
-# RETURNS      : A list with $a (the intercept) and $b (the slope), so that
-#                x = a + b * y. The line also passes through
-#                (mean of X, mean of Y).
+# RETURNS      : A list you can print directly to see a readable summary
+#                (it prints as "Regression line R_X/Y ... x = a + b*y" with
+#                a and b filled in). It has:
+#                  $a         — the intercept.
+#                  $b         — the slope: how much X changes per one-unit
+#                               increase in Y.
+#                  $intercept — the same value as $a, under a clearer name.
+#                  $slope     — the same value as $b, under a clearer name.
+#                  $equation  — the fitted line as readable text, e.g.
+#                               "x = 130.3504 + 0.6361 * y".
+#                The line also passes through (mean of X, mean of Y).
 # EXAMPLE      :
 #   model <- regression_x_on_y(c(1,2,3,4,5), c(1,1,2,2,4))
+#   model                      # prints a readable summary
 #   predict_linear(model$a, model$b, x_new = 3)   # predicts X from Y = 3
 # -----------------------------------------------------------------------------
 regression_x_on_y <- function(x, y, n = NULL) {
   b <- covariance(x, y, n) / variance(y, n)
   a <- arithmetic_mean(x, n) - b * arithmetic_mean(y, n)
-  list(a = a, b = b)
+  structure(list(
+    a = a, b = b, intercept = a, slope = b,
+    equation = sprintf("x = %.4f + %.4f * y", a, b),
+    description = "Regression line R_X/Y (predicts X from Y)",
+    labels = c("intercept (a)", "slope     (b)")
+  ), class = "stat_fit")
 }
 
 # -----------------------------------------------------------------------------
@@ -623,10 +680,14 @@ variance_explained_fit <- function(actual, predicted, n = NULL) {
 #   x : vector of X values (raw data; every y value must be positive,
 #       since the logarithm of a non-positive number does not exist).
 #   y : vector of Y values.
-# RETURNS      : A list with $a and $b, the parameters of y = a * e^(b*x).
+# RETURNS      : A list you can print directly for a readable summary
+#                ("Exponential fit y = a * e^(b*x) ... y = 5.8846 * e^(-0.1307*x)").
+#                It has $a and $b (the parameters), plus $equation (the
+#                fitted curve as readable text).
 # EXAMPLE      :
 #   x <- c(0, 1, 2, 3, 6); y <- c(7, 5, 4, 3.5, 3)
 #   model <- fit_exponential(x, y)
+#   model                                          # prints a readable summary
 #   model$a; model$b                              # a = 5.8846, b = -0.1307
 #   predicted <- predict_exponential(model$a, model$b, x)
 #   r_squared_fit(y, predicted)                    # 0.81225
@@ -635,7 +696,13 @@ fit_exponential <- function(x, y) {
   Y <- log(y)
   b <- covariance(x, Y) / variance(x)
   A <- arithmetic_mean(Y) - b * arithmetic_mean(x)
-  list(a = exp(A), b = b)
+  a <- exp(A)
+  structure(list(
+    a = a, b = b,
+    equation = sprintf("y = %.4f * e^(%.4f * x)", a, b),
+    description = "Exponential fit y = a * e^(b*x)",
+    labels = c("a", "b")
+  ), class = "stat_fit")
 }
 
 # -----------------------------------------------------------------------------
@@ -666,11 +733,17 @@ predict_exponential <- function(a, b, x_new) {
 # PARAMETERS   :
 #   x : vector of X values (raw data).
 #   y : vector of Y values (none may be 0, since 1/0 does not exist).
-# RETURNS      : A list with $a and $b, the parameters of y = 1 / (a + b*x).
+# RETURNS      : A list you can print directly for a readable summary. It
+#                has $a and $b (the parameters of y = 1 / (a + b*x)), plus
+#                $equation (the fitted curve as readable text).
 # EXAMPLE      :
 #   x <- c(0, 1, 2, 3, 6); y <- c(7, 5, 4, 3.5, 3)
 #   model <- fit_hyperbolic(x, y)
-#   model$a; model$b                              # a = 0.169, b = -0.0306
+#   model                                          # prints a readable summary
+#   model$a; model$b                              # a = 0.169, b = 0.0306
+#   # (the course slides print this as "b = -0.0306" and "y = 1/(0.169 -
+#   # 0.0306x)", but solving their own normal equations actually gives
+#   # b = +0.0306 — plugging that in is what reproduces their MSE and R^2)
 #   predicted <- predict_hyperbolic(model$a, model$b, x)
 #   r_squared_fit(y, predicted)                    # 0.85724
 # -----------------------------------------------------------------------------
@@ -678,7 +751,12 @@ fit_hyperbolic <- function(x, y) {
   Y <- 1 / y
   b <- covariance(x, Y) / variance(x)
   a <- arithmetic_mean(Y) - b * arithmetic_mean(x)
-  list(a = a, b = b)
+  structure(list(
+    a = a, b = b,
+    equation = sprintf("y = 1 / (%.4f + %.4f * x)", a, b),
+    description = "Hyperbolic fit y = 1 / (a + b*x)",
+    labels = c("a", "b")
+  ), class = "stat_fit")
 }
 
 # -----------------------------------------------------------------------------
@@ -712,10 +790,13 @@ predict_hyperbolic <- function(a, b, x_new) {
 # PARAMETERS   :
 #   x : vector of X values (all strictly positive).
 #   y : vector of Y values (all strictly positive).
-# RETURNS      : A list with $a and $b, the parameters of y = a * x^b.
+# RETURNS      : A list you can print directly for a readable summary. It
+#                has $a and $b (the parameters of y = a * x^b), plus
+#                $equation (the fitted curve as readable text).
 # EXAMPLE      :
 #   x <- c(1,2,3,4,5); y <- c(0.5,2.0,4.5,8.0,12.5)
 #   model <- fit_power(x, y)
+#   model                                          # prints a readable summary
 #   predicted <- predict_power(model$a, model$b, x)
 #   r_squared_fit(y, predicted)
 # -----------------------------------------------------------------------------
@@ -723,7 +804,13 @@ fit_power <- function(x, y) {
   X <- log(x); Y <- log(y)
   b <- covariance(X, Y) / variance(X)
   A <- arithmetic_mean(Y) - b * arithmetic_mean(X)
-  list(a = exp(A), b = b)
+  a <- exp(A)
+  structure(list(
+    a = a, b = b,
+    equation = sprintf("y = %.4f * x^%.4f", a, b),
+    description = "Power fit y = a * x^b",
+    labels = c("a", "b")
+  ), class = "stat_fit")
 }
 
 # -----------------------------------------------------------------------------
@@ -837,4 +924,71 @@ polynomial_regression <- function(x, y, degree) {
   preds <- sapply(1:degree, function(k) x^k)
   colnames(preds) <- paste0("x^", 1:degree)
   multiple_regression(preds, y)
+}
+
+
+# =============================================================================
+# 7. GRAPHS
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# plot_regression_lines(x, y, n = NULL, show_both = TRUE, main = "Scatter plot and regression line(s)")
+# -----------------------------------------------------------------------------
+# WHAT IT DOES : Draws the scatter plot of the data (one point per pair, its
+#                size proportional to how often that pair repeats) together
+#                with the regression line(s): R_Y/X (predicts Y from X, in
+#                red) and, if `show_both = TRUE`, also R_X/Y (predicts X
+#                from Y, drawn as it appears in the X-Y plane, in green
+#                dashed). Both lines always cross at the centre of gravity
+#                (mean of X, mean of Y), which the plot also marks.
+# PARAMETERS   :
+#   x         : the X value of each pair.
+#   y         : the Y value of each pair.
+#   n         : (optional) how many times each pair appears (its
+#               frequency). Leave empty for raw, one-row-per-observation
+#               data.
+#   show_both : TRUE (default) draws both regression lines (R_Y/X and
+#               R_X/Y). FALSE draws only R_Y/X.
+#   main      : title of the plot.
+# RETURNS      : Invisibly, a list with $R_Y_X and $R_X_Y — the two fitted
+#                models (each with $a and $b), in case you want to inspect
+#                or reuse them. Mainly used for the plot it draws.
+# EXAMPLE      :  (height/weight table from the slides)
+#   pares <- table_to_pairs(tab, x_marks, y_marks)
+#   plot_regression_lines(pares$x, pares$y, pares$n,
+#                          main = "Height vs Weight")
+# -----------------------------------------------------------------------------
+plot_regression_lines <- function(x, y, n = NULL, show_both = TRUE,
+                                  main = "Scatter plot and regression line(s)") {
+  n_size <- if (is.null(n)) rep(1, length(x)) else n
+  model_yx <- regression_y_on_x(x, y, n)
+  
+  plot(x, y, cex = sqrt(n_size), pch = 19, col = "steelblue",
+       xlab = "X", ylab = "Y", main = main)
+  abline(a = model_yx$a, b = model_yx$b, col = "firebrick", lwd = 2)
+  
+  legend_labels <- c("data (size = frequency)", "R_Y/X")
+  legend_colors <- c("steelblue", "firebrick")
+  legend_pch    <- c(19, NA)
+  legend_lty    <- c(NA, 1)
+  
+  model_xy <- NULL
+  if (show_both) {
+    model_xy <- regression_x_on_y(x, y, n)
+    # R_X/Y is x = a' + b'*y; rewritten as y = (x - a')/b' to draw it in the X-Y plane
+    abline(a = -model_xy$a / model_xy$b, b = 1 / model_xy$b,
+           col = "darkgreen", lwd = 2, lty = 2)
+    legend_labels <- c(legend_labels, "R_X/Y")
+    legend_colors <- c(legend_colors, "darkgreen")
+    legend_pch    <- c(legend_pch, NA)
+    legend_lty    <- c(legend_lty, 2)
+  }
+  
+  center <- bivariate_mean(x, y, n)
+  points(center["mean_x"], center["mean_y"], pch = 4, cex = 1.5, lwd = 2, col = "black")
+  
+  legend("topleft", legend = legend_labels, col = legend_colors,
+         pch = legend_pch, lty = legend_lty, bty = "n")
+  
+  invisible(list(R_Y_X = model_yx, R_X_Y = model_xy))
 }
