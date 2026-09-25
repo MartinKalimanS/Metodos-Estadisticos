@@ -1,3 +1,6 @@
+##SOURCE PARA IMPORTAR LA LIBRERIA 
+## source("chapter_1/formulas_chapter1.R")
+
 # =============================================================================
 #  CHAPTER 1 - DESCRIPTIVE STATISTICS OF ONE VARIABLE
 #  One R function for every formula / concept in the slides.
@@ -108,12 +111,12 @@ freq_or_ones <- function(x, n = NULL) {
 # absolute_freq(data)
 # -----------------------------------------------------------------------------
 # WHAT IT DOES : Counts how many times each different value appears.
-#                This is the ABSOLUTE FREQUENCY  n_i  of each modality x_i.
+#                This count is called the ABSOLUTE FREQUENCY of that value.
 # FORMULA      : n_i = number of individuals with value x_i
 # PARAMETERS   :
 #   data : vector of raw observations (numbers OR text, e.g. "Spain").
-# RETURNS      : Named numeric vector. Names = the values x_i (sorted),
-#                numbers = n_i.
+# RETURNS      : Named numeric vector. Names = the values (sorted),
+#                numbers = the absolute frequency.
 # EXAMPLE      :
 #   prices <- c(6,8,6,8,6,8,12,6,8,8,6,8,8,8,12,12,8,8,12,6,8,6,6,8,12,6,6,6,6,6)
 #   absolute_freq(prices)
@@ -134,7 +137,7 @@ absolute_freq <- function(data) {
 # FORMULA      : f_i = n_i / N          (N = total number of data)
 # PARAMETERS   :
 #   data : vector of raw observations (numbers or text).
-# RETURNS      : Named numeric vector with f_i (they add up to 1).
+# RETURNS      : Named numeric vector with the relative frequency (they add up to 1).
 # EXAMPLE      :
 #   relative_freq(prices)
 #   #         6         8        12
@@ -154,7 +157,7 @@ relative_freq <- function(data) {
 #   data : vector of raw observations. Must be orderable (numbers or
 #          ordinal categories). For NOMINAL variables (e.g. colours) the
 #          slides say cumulative frequencies make no sense.
-# RETURNS      : Named numeric vector with N_i (the last one equals N).
+# RETURNS      : Named numeric vector with the cumulative absolute frequency (the last one equals the total number of data).
 # EXAMPLE      :
 #   cumulative_absolute_freq(prices)
 #   #  6  8 12
@@ -171,7 +174,7 @@ cumulative_absolute_freq <- function(data) {
 # FORMULA      : F_i = N_i / N
 # PARAMETERS   :
 #   data : vector of raw observations (orderable).
-# RETURNS      : Named numeric vector with F_i (the last one equals 1).
+# RETURNS      : Named numeric vector with the cumulative relative frequency (the last one equals 1).
 # EXAMPLE      :
 #   cumulative_relative_freq(prices)
 #   #         6         8        12
@@ -186,7 +189,7 @@ cumulative_relative_freq <- function(data) {
 # frequency_table(data)
 # -----------------------------------------------------------------------------
 # WHAT IT DOES : Builds the complete frequency table of the slides:
-#                columns  x_i | n_i | f_i | N_i | F_i
+#                columns  each value | the absolute frequency | the relative frequency | the cumulative absolute frequency | the cumulative relative frequency
 # PARAMETERS   :
 #   data : vector of raw observations.
 # RETURNS      : A data.frame with columns xi, ni, fi, Ni, Fi.
@@ -221,9 +224,9 @@ frequency_table <- function(data) {
 # WHAT IT DOES : Width (amplitude) of each interval.
 # FORMULA      : a_i = L_i - L_{i-1}
 # PARAMETERS   :
-#   lower : vector with the lower limits L_{i-1} of the intervals.
-#   upper : vector with the upper limits L_i   of the intervals.
-# RETURNS      : Numeric vector with a_i.
+#   lower : vector with the lower limits the lower limit of the interval of the intervals.
+#   upper : vector with the upper limits the upper limit of the interval   of the intervals.
+# RETURNS      : Numeric vector with the interval width.
 # EXAMPLE      :  (cafeteria example: 0-3, 3-6, 6-9, 9-12, 12-15)
 #   interval_width(c(0,3,6,9,12), c(3,6,9,12,15))     # 3 3 3 3 3
 # -----------------------------------------------------------------------------
@@ -238,9 +241,9 @@ interval_width <- function(lower, upper) {
 #                value that represents the interval in all calculations.
 # FORMULA      : x_i = (L_{i-1} + L_i) / 2
 # PARAMETERS   :
-#   lower : vector of lower limits L_{i-1}.
-#   upper : vector of upper limits L_i.
-# RETURNS      : Numeric vector with x_i.
+#   lower : vector of lower limits the lower limit of the interval.
+#   upper : vector of upper limits the upper limit of the interval.
+# RETURNS      : Numeric vector with each value.
 # EXAMPLE      :
 #   class_mark(c(0,3,6,9,12), c(3,6,9,12,15))   # 1.5 4.5 7.5 10.5 13.5
 # -----------------------------------------------------------------------------
@@ -258,11 +261,11 @@ class_mark <- function(lower, upper) {
 #                h_i = f_i / a_i       (relative = TRUE,  uses f_i)
 #                Both give the same shape (slide "Note on Histograms").
 # PARAMETERS   :
-#   n        : vector of absolute frequencies n_i of each interval.
-#   lower    : vector of lower limits L_{i-1}.
-#   upper    : vector of upper limits L_i.
-#   relative : FALSE (default) -> n_i/a_i ;  TRUE -> f_i/a_i.
-# RETURNS      : Numeric vector with h_i.
+#   n        : vector with the absolute frequency of each interval.
+#   lower    : vector of lower limits the lower limit of the interval.
+#   upper    : vector of upper limits the upper limit of the interval.
+#   relative : FALSE (default) -> the absolute frequency/the interval width ;  TRUE -> the relative frequency/the interval width.
+# RETURNS      : Numeric vector with the histogram height.
 # EXAMPLE      :  (temperatures "But also" table)
 #   histogram_height(c(9,8,5,7,6), c(70,80,85,90,95), c(80,85,90,95,110),
 #                    relative = TRUE)
@@ -274,25 +277,33 @@ histogram_height <- function(n, lower, upper, relative = FALSE) {
 }
 
 # -----------------------------------------------------------------------------
-# group_into_intervals(data, breaks)
+# group_into_intervals(data, breaks, right_closed = TRUE)
 # -----------------------------------------------------------------------------
 # WHAT IT DOES : Takes RAW data and counts how many observations fall in
-#                each interval (L_{i-1}, L_i].
+#                each interval.
 # PARAMETERS   :
-#   data   : vector of raw numeric observations.
-#   breaks : vector with ALL the interval limits in increasing order,
-#            e.g. c(70, 75, 80, 85) means (70,75], (75,80], (80,85].
-#            The first break must be BELOW the smallest data value
-#            (because the lower limit is not included).
+#   data         : vector of raw numeric observations.
+#   breaks       : vector with ALL the interval limits in increasing order,
+#                  e.g. c(70, 75, 80) means two intervals: 70-75 and 75-80.
+#                  Every data value must be inside the first and last break.
+#   right_closed : TRUE (default) -> each interval excludes its lower limit
+#                  and includes its upper limit, the convention of the
+#                  slides: a value equal to a limit goes to the interval on
+#                  its LEFT (80 goes into 75-80).
+#                  FALSE -> each interval includes its lower limit and
+#                  excludes its upper limit: a value equal to a limit goes
+#                  to the interval on its RIGHT (80 goes into 80-85). The
+#                  temperature table on slide 22 uses this one.
 # RETURNS      : data.frame with columns lower, upper, ni.
 # EXAMPLE      :
 #   temps <- c(72,78,86,93,106,107,98,82,81,77,87,82,91,95,92,83,76,78,73,
 #              81,86,92,93,84,107,99,94,86,81,77,73,76,80,88,91)
-#   group_into_intervals(temps, seq(70, 110, by = 5))
-#   # ni = 3 6 8 5 7 3 0 3   (same as the slide)
+#   group_into_intervals(temps, seq(70, 110, by = 5), right_closed = FALSE)
+#   # ni = 3 6 8 5 7 3 0 3   (same as the table on slide 22)
 # -----------------------------------------------------------------------------
-group_into_intervals <- function(data, breaks) {
-  counts <- table(cut(data, breaks = breaks, right = TRUE))
+group_into_intervals <- function(data, breaks, right_closed = TRUE) {
+  counts <- table(cut(data, breaks = breaks, right = right_closed,
+                      include.lowest = TRUE))
   data.frame(lower = breaks[-length(breaks)],
              upper = breaks[-1],
              ni    = as.numeric(counts))
@@ -302,12 +313,12 @@ group_into_intervals <- function(data, breaks) {
 # grouped_frequency_table(lower, upper, n)
 # -----------------------------------------------------------------------------
 # WHAT IT DOES : Builds the full table for grouped data:
-#                lower | upper | x_i (class mark) | a_i | n_i | f_i |
-#                N_i | F_i | h_i (= n_i / a_i)
+#                lower | upper | each value (class mark) | the interval width | the absolute frequency | the relative frequency |
+#                the cumulative absolute frequency | the cumulative relative frequency | the histogram height (= the absolute frequency / the interval width)
 # PARAMETERS   :
-#   lower : vector of lower limits L_{i-1}.
-#   upper : vector of upper limits L_i.
-#   n     : vector of absolute frequencies n_i.
+#   lower : vector of lower limits the lower limit of the interval.
+#   upper : vector of upper limits the upper limit of the interval.
+#   n     : vector of absolute how many times each one appears (its frequency).
 # RETURNS      : data.frame with all those columns.
 # EXAMPLE      :
 #   grouped_frequency_table(c(0,3,6,9,12), c(3,6,9,12,15), c(40,30,10,5,5))
@@ -372,11 +383,12 @@ plot_pie_chart <- function(categories, n, main = "Pie chart") {
 # plot_dot_diagram(x, n, main = "Bar / dot diagram")
 # -----------------------------------------------------------------------------
 # WHAT IT DOES : Bar or dot diagram for DISCRETE quantitative variables:
-#                a thin vertical bar at each value x_i with height n_i and
+#                a thin vertical bar at each different value, with the bar's height
+#                equal to how many times that value appears (its frequency), and
 #                a dot on top.
 # PARAMETERS   :
-#   x    : vector of the different values x_i.
-#   n    : vector of their frequencies n_i.
+#   x    : vector of the different values.
+#   n    : vector with how many times each value appears (its frequency).
 #   main : title.
 # RETURNS      : Nothing; draws the plot.
 # EXAMPLE      :
@@ -392,8 +404,9 @@ plot_dot_diagram <- function(x, n, main = "Bar / dot diagram") {
 # plot_histogram(lower, upper, n, main = "Histogram")
 # -----------------------------------------------------------------------------
 # WHAT IT DOES : Histogram for data grouped in intervals. Each rectangle
-#                has as base the interval and height h_i = n_i / a_i, so the
-#                AREA is proportional to n_i (works with unequal widths).
+#                has as base the interval, and its height is set so the
+#                rectangle's AREA is proportional to the absolute frequency
+#                of that interval (this works even when interval widths differ).
 # PARAMETERS   :
 #   lower : vector of lower limits.
 #   upper : vector of upper limits.
@@ -457,12 +470,12 @@ plot_frequency_polygon <- function(lower, upper, n, add = FALSE,
 #                the number of data.
 # FORMULA      : mu = sum(x_i * n_i) / N  = sum(x_i * f_i)
 # PARAMETERS   :
-#   x : raw data, OR the different values x_i (or class marks).
-#   n : (optional) frequencies n_i of each x_i. Leave empty for raw data.
+#   x : raw data, OR the different values (or class marks).
+#   n : (optional) the absolute frequency of each value in `x`. Leave empty for raw data.
 # RETURNS      : One number, the mean.
 # EXAMPLES     :
 #   arithmetic_mean(c(7, 11, 11, 8, 12, 7, 6, 6))                  # 8.5
-#   arithmetic_mean(c(13.725,13.975,14.225,14.725), c(7,14,18,6))  # 14.0917
+#   arithmetic_mean(c(13.725,13.975,14.225,14.725), c(7,14,18,6))  # 14.13611
 #   # Grouped data -> use class marks:
 #   arithmetic_mean(class_mark(c(0,3,6,9,12), c(3,6,9,12,15)), c(40,30,10,5,5))
 # -----------------------------------------------------------------------------
@@ -476,7 +489,7 @@ arithmetic_mean <- function(x, n = NULL) {
 # -----------------------------------------------------------------------------
 # WHAT IT DOES : Sample mean x-bar. It is computed exactly like the
 #                arithmetic mean; it is the best estimator of the
-#                population mean mu. (Exists only so the name matches
+#                population mean the mean. (Exists only so the name matches
 #                the slide "Sample Mean and Variance".)
 # FORMULA      : x_bar = sum(x_i * n_i) / n
 # PARAMETERS   : same as arithmetic_mean().
@@ -498,8 +511,9 @@ sample_mean <- function(x, n = NULL) {
 #   a      : the number that multiplies X.
 #   b      : the number that is added.
 # RETURNS      : One number: the mean of Y.
-# EXAMPLE      :  (slide 31: X = 0.25*Y + 13.975, and mu_Y = 0.4667)
-#   affine_mean(0.4667, a = 0.25, b = 13.975)     # 14.0917 = mu_X
+# EXAMPLE      :  (slide 31: X = 0.25*Y + 13.975. The y values are
+#                 -1, 0, 1, 3 with n = 7, 14, 18, 6, so mu_Y = 29/45)
+#   affine_mean(29/45, a = 0.25, b = 13.975)     # 14.13611 = mu_X
 # -----------------------------------------------------------------------------
 affine_mean <- function(mean_x, a, b) {
   a * mean_x + b
@@ -529,7 +543,7 @@ affine_transform <- function(x, a, b) {
 # WHAT IT DOES : Mean where each value has a different importance (weight).
 # FORMULA      : WM = sum(x_i * w_i) / sum(w_i)
 # PARAMETERS   :
-#   x : vector of values x_i.
+#   x : vector of values.
 #   w : vector of weights w_i (same length as x).
 # RETURNS      : One number.
 # EXAMPLE      :  (student grades)
@@ -547,8 +561,8 @@ weighted_mean <- function(x, w) {
 #                mean of the squares.
 # FORMULA      : RMS = sqrt( sum(n_i * x_i^2) / N )
 # PARAMETERS   :
-#   x : raw data, or the different values x_i.
-#   n : (optional) frequencies n_i.
+#   x : raw data, or the different values.
+#   n : (optional) how many times each one appears (its frequency).
 # RETURNS      : One number.
 # EXAMPLE      :  (calls to the technical service)
 #   quadratic_mean(c(2, 3, 1, 0, 4, 3))      # 2.54951
@@ -561,13 +575,13 @@ quadratic_mean <- function(x, n = NULL) {
 # -----------------------------------------------------------------------------
 # mode_value(x, n = NULL)
 # -----------------------------------------------------------------------------
-# WHAT IT DOES : Mode (Mo): the value(s) with the highest frequency.
+# WHAT IT DOES : Mode (the mode): the value(s) with the highest frequency.
 #                - It can have several modes (all are returned).
 #                - If ALL values have the same frequency there is NO mode
 #                  and the function returns NA.
 # PARAMETERS   :
-#   x : raw data (numbers or text), or the different values x_i.
-#   n : (optional) frequencies n_i.
+#   x : raw data (numbers or text), or the different values.
+#   n : (optional) how many times each one appears (its frequency).
 # RETURNS      : Vector with the mode(s), or NA if there is no mode.
 # EXAMPLES     :
 #   mode_value(c(7, 11, 11, 8, 12, 9, 6, 6))            # 6 11  (two modes)
@@ -586,8 +600,9 @@ mode_value <- function(x, n = NULL) {
 # modal_interval(lower, upper, n)
 # -----------------------------------------------------------------------------
 # WHAT IT DOES : For grouped (continuous) data: the interval with the
-#                highest histogram height h_i = n_i / a_i. (NOT simply the
-#                highest n_i, because widths may differ.)
+#                highest histogram height (absolute frequency divided by
+#                interval width). This is NOT simply the interval with the
+#                highest absolute frequency, because widths may differ.
 # PARAMETERS   :
 #   lower : vector of lower limits.
 #   upper : vector of upper limits.
@@ -606,13 +621,14 @@ modal_interval <- function(lower, upper, n) {
 # -----------------------------------------------------------------------------
 # median_value(x, n = NULL)
 # -----------------------------------------------------------------------------
-# WHAT IT DOES : Median (Me): value that splits the ordered data in two
-#                halves. N odd -> the middle value. N even -> mean of the
-#                two middle values. (It is the quantile c = 0.5.)
+# WHAT IT DOES : Median (the median): value that splits the ordered data in two
+#                halves. With an odd number of data, it is the middle value.
+#                With an even number of data, it is the mean of the two
+#                middle values. (It is the quantile c = 0.5.)
 #                The data do NOT need to be sorted; the function sorts them.
 # PARAMETERS   :
-#   x : raw data, or the different values x_i.
-#   n : (optional) frequencies n_i.
+#   x : raw data, or the different values.
+#   n : (optional) how many times each one appears (its frequency).
 # RETURNS      : One number.
 # EXAMPLES     :
 #   median_value(c(11, 11, 16, 17, 25))             # 16
@@ -630,18 +646,18 @@ median_value <- function(x, n = NULL) {
 # -----------------------------------------------------------------------------
 # quantile_discrete(x, c, n = NULL)
 # -----------------------------------------------------------------------------
-# WHAT IT DOES : Quantile X(c) of NON-grouped data, using EXACTLY the rule of
+# WHAT IT DOES : The quantile of NON-grouped data, using EXACTLY the rule of
 #                the slides (this can differ from R's quantile(), which uses
 #                another method):
-#                  1. Sort the data. Compute c*N = E + D
+#                  1. Sort the data. Compute c*the total number of data = E + D
 #                     (E = integer part, D = decimal part).
-#                  2. If D != 0 -> X(c) = value in position E + 1.
-#                  3. If D == 0 -> X(c) = (value in position E +
+#                  2. If D != 0 -> the quantile = value in position E + 1.
+#                  3. If D == 0 -> the quantile = (value in position E +
 #                                         value in position E+1) / 2.
 # PARAMETERS   :
-#   x : raw data (any order), or the different values x_i.
-#   c : a number strictly between 0 and 1 (e.g. 0.25 for Q1, 0.37 for P37).
-#   n : (optional) frequencies n_i.
+#   x : raw data (any order), or the different values.
+#   c : a number strictly between 0 and 1 (e.g. 0.25 for the first quartile, 0.37 for the 37th percentile).
+#   n : (optional) how many times each one appears (its frequency).
 # RETURNS      : One number.
 # EXAMPLE      :
 #   d <- c(2, 5, 3, 4, 7, 0, 11, 2, 3, 8)
@@ -662,11 +678,11 @@ quantile_discrete <- function(x, c, n = NULL) {
 # -----------------------------------------------------------------------------
 # quartile(x, k, n = NULL)
 # -----------------------------------------------------------------------------
-# WHAT IT DOES : Quartile Q_k = X(k/4).   Q1 = 25%, Q2 = median, Q3 = 75%.
+# WHAT IT DOES : Quartile Q_k = X(k/4).   the first quartile = 25%, Q2 = median, the third quartile = 75%.
 # PARAMETERS   :
-#   x : raw data, or the different values x_i.
+#   x : raw data, or the different values.
 #   k : 1, 2 or 3.
-#   n : (optional) frequencies n_i.
+#   n : (optional) how many times each one appears (its frequency).
 # RETURNS      : One number.
 # EXAMPLE      :
 #   quartile(c(2,5,3,4,7,0,11,2,3,8), 1)    # 2
@@ -683,9 +699,9 @@ quartile <- function(x, k, n = NULL) {
 # -----------------------------------------------------------------------------
 # WHAT IT DOES : Decile D_k = X(k/10). There are 9 deciles.
 # PARAMETERS   :
-#   x : raw data, or the different values x_i.
+#   x : raw data, or the different values.
 #   k : whole number from 1 to 9.
-#   n : (optional) frequencies n_i.
+#   n : (optional) how many times each one appears (its frequency).
 # RETURNS      : One number.
 # EXAMPLE      :  decile(c(2,5,3,4,7,0,11,2,3,8), 9)     # 9.5
 # -----------------------------------------------------------------------------
@@ -697,11 +713,11 @@ decile <- function(x, k, n = NULL) {
 # -----------------------------------------------------------------------------
 # percentile(x, k, n = NULL)
 # -----------------------------------------------------------------------------
-# WHAT IT DOES : Percentile P_k = X(k/100): leaves k% of the data below.
+# WHAT IT DOES : The percentile that leaves k% of the data below it.
 # PARAMETERS   :
-#   x : raw data, or the different values x_i.
+#   x : raw data, or the different values.
 #   k : whole number from 1 to 99.
-#   n : (optional) frequencies n_i.
+#   n : (optional) how many times each one appears (its frequency).
 # RETURNS      : One number.
 # EXAMPLE      :
 #   percentile(c(2,5,3,4,7,0,11,2,3,8), 37)    # 3
@@ -715,15 +731,15 @@ percentile <- function(x, k, n = NULL) {
 # -----------------------------------------------------------------------------
 # quantile_grouped(lower, upper, n, c)
 # -----------------------------------------------------------------------------
-# WHAT IT DOES : Quantile X(c) for data GROUPED IN INTERVALS (continuous
+# WHAT IT DOES : Quantile the quantile for data GROUPED IN INTERVALS (continuous
 #                case), by linear interpolation inside the interval:
-#                  1. Compute c*N.
-#                  2. Find the first interval i with N_{i-1} <= c*N < N_i.
-#                  3. X(c) = L_{i-1} + (c*N - N_{i-1}) / n_i * a_i
-#                where L_{i-1} = lower limit of that interval,
+#                  1. Compute c*the total number of data.
+#                  2. Find the first interval i with N_{i-1} <= c*the total number of data < the cumulative absolute frequency.
+#                  3. the quantile = the lower limit of the interval + (c*the total number of data - N_{i-1}) / the absolute frequency * the interval width
+#                where the lower limit of the interval = lower limit of that interval,
 #                      N_{i-1} = cumulative frequency of the PREVIOUS interval,
-#                      a_i     = width of the interval,
-#                      n_i     = frequency of the interval.
+#                      the interval width     = width of the interval,
+#                      the absolute frequency     = frequency of the interval.
 # PARAMETERS   :
 #   lower : vector of lower limits.
 #   upper : vector of upper limits.
@@ -760,8 +776,9 @@ quantile_grouped <- function(lower, upper, n, c) {
 # EXAMPLE      :
 #   L <- c(0,3,6,9,12); U <- c(3,6,9,12,15); ni <- c(40,30,10,5,5)
 #   median_grouped(L, U, ni)           # 3.5
-#   quartile_grouped(L, U, ni, 1)      # 1.875
-#   percentile_grouped(L, U, ni, 90)   # 9
+#   quartile_grouped(L, U, ni, 1)      # 1.6875
+#   decile_grouped(L, U, ni, 1)        # 0.675
+#   percentile_grouped(L, U, ni, 90)   # 9.6
 # -----------------------------------------------------------------------------
 median_grouped <- function(lower, upper, n) {
   quantile_grouped(lower, upper, n, 0.5)
@@ -790,7 +807,7 @@ percentile_grouped <- function(lower, upper, n, k) {
 # WHAT IT DOES : Range R = largest value - smallest value.
 #                (Very sensitive to errors / outliers.)
 # PARAMETERS   :
-#   x : raw data or the different values x_i (frequencies don't matter).
+#   x : raw data or the different values (frequencies don't matter).
 # RETURNS      : One number.
 # EXAMPLE      :  range_value(c(2, 5, 3, 4, 7, 0, 11, 2, 3, 8))    # 11
 # -----------------------------------------------------------------------------
@@ -801,10 +818,10 @@ range_value <- function(x) {
 # -----------------------------------------------------------------------------
 # interquartile_range(x, n = NULL)
 # -----------------------------------------------------------------------------
-# WHAT IT DOES : Interquartile range  R_Q = Q3 - Q1  (robust).
+# WHAT IT DOES : Interquartile range  R_Q = the third quartile - the first quartile  (robust).
 # PARAMETERS   :
-#   x : raw data, or the different values x_i.
-#   n : (optional) frequencies n_i.
+#   x : raw data, or the different values.
+#   n : (optional) how many times each one appears (its frequency).
 # RETURNS      : One number.
 # EXAMPLE      :  interquartile_range(c(2,5,3,4,7,0,11,2,3,8))    # 7 - 2 = 5
 # -----------------------------------------------------------------------------
@@ -817,8 +834,8 @@ interquartile_range <- function(x, n = NULL) {
 # -----------------------------------------------------------------------------
 # WHAT IT DOES : Intercentile range  R_P = P99 - P1  (robust).
 # PARAMETERS   :
-#   x : raw data, or the different values x_i.
-#   n : (optional) frequencies n_i.
+#   x : raw data, or the different values.
+#   n : (optional) how many times each one appears (its frequency).
 # RETURNS      : One number.
 # EXAMPLE      :  intercentile_range(c(2,5,3,4,7,0,11,2,3,8))    # 11 - 0 = 11
 # -----------------------------------------------------------------------------
@@ -849,8 +866,8 @@ deviations <- function(x, p) {
 # FORMULA      : MD(p) = sum(|x_i - p| * n_i) / N
 #                If p is not given, p = arithmetic mean  ->  "mean deviation" MD.
 # PARAMETERS   :
-#   x : raw data, or the different values x_i.
-#   n : (optional) frequencies n_i.
+#   x : raw data, or the different values.
+#   n : (optional) how many times each one appears (its frequency).
 #   p : (optional) reference point. Default: the mean.
 #       Use p = median_value(x) for the deviation about the median.
 # RETURNS      : One number.
@@ -872,14 +889,14 @@ mean_deviation <- function(x, n = NULL, p = NULL) {
 # FORMULA      : MSE(p) = sum(n_i * (x_i - p)^2) / N
 #                With p = mean, MSE equals the variance.
 # PARAMETERS   :
-#   x : raw data, or the different values x_i.
-#   n : (optional) frequencies n_i.
+#   x : raw data, or the different values.
+#   n : (optional) how many times each one appears (its frequency).
 #   p : (optional) reference point. Default: the mean.
 # RETURNS      : One number.
 # EXAMPLES     :
 #   v <- c(5, 2, 3, 3, 3, 5, 7)
-#   mean_squared_error(v)                        # about the mean:   2.857143
-#   mean_squared_error(v, p = median_value(v))   # about the median: 3.857143
+#   mean_squared_error(v)                        # about the mean (4):   2.571429
+#   mean_squared_error(v, p = median_value(v))   # about the median (3): 3.571429
 #   # Error of a prediction (slide 53): use x = predicted - actual, p = 0
 #   err <- c(0,0,0,1,1,1,3,3,3) - c(0,1,3,0,1,3,0,1,3)
 #   mean_squared_error(err, n = c(6,3,2,3,5,1,1,3,7), p = 0)
@@ -894,11 +911,11 @@ mean_squared_error <- function(x, n = NULL, p = NULL) {
 # variance(x, n = NULL)
 # -----------------------------------------------------------------------------
 # WHAT IT DOES : (Population) variance: mean of the squared deviations from
-#                the mean. Divides by N.   !! R's var() divides by N-1 !!
+#                the mean. Divides by the total number of data.   !! R's var() divides by the total number of data-1 !!
 # FORMULA      : V = sigma^2 = sum((x_i - mu)^2 * n_i) / N
 # PARAMETERS   :
-#   x : raw data, or the different values x_i (or class marks).
-#   n : (optional) frequencies n_i.
+#   x : raw data, or the different values (or class marks).
+#   n : (optional) how many times each one appears (its frequency).
 # RETURNS      : One number.
 # EXAMPLE      :
 #   variance(c(12, 10, 9, 9, 10))     # 1.2
@@ -929,11 +946,11 @@ variance_shortcut <- function(x, n = NULL) {
 # standard_deviation(x, n = NULL)
 # -----------------------------------------------------------------------------
 # WHAT IT DOES : (Population) standard deviation = square root of variance.
-#                Divides by N.   !! R's sd() divides by N-1 !!
+#                Divides by the total number of data.   !! R's sd() divides by the total number of data-1 !!
 # FORMULA      : sigma = sqrt(V)
 # PARAMETERS   :
-#   x : raw data, or the different values x_i.
-#   n : (optional) frequencies n_i.
+#   x : raw data, or the different values.
+#   n : (optional) how many times each one appears (its frequency).
 # RETURNS      : One number.
 # EXAMPLE      :
 #   standard_deviation(c(12, 10, 9, 9, 10))   # 1.095445  (List A: concentrated)
@@ -977,8 +994,8 @@ sample_sd <- function(x, n = NULL) {
 #                Same result as R's built-in var() on raw data.
 # FORMULA      : s^2 = sum((x_i - x_bar)^2 * n_i) / (n - 1)
 # PARAMETERS   :
-#   x : raw data, or the different values x_i.
-#   n : (optional) frequencies n_i.
+#   x : raw data, or the different values.
+#   n : (optional) how many times each one appears (its frequency).
 # RETURNS      : One number.
 # EXAMPLE      :  sample_quasi_variance(c(12, 10, 9, 9, 10))    # 1.5
 # -----------------------------------------------------------------------------
@@ -1030,8 +1047,8 @@ quasi_variance_from_sample_variance <- function(sn2, size) {
 # FORMULA      : z = (x - mu) / sigma
 # PARAMETERS   :
 #   value : the value(s) x to standardise (one number or a vector).
-#   mean  : the mean mu of its distribution.
-#   sd    : the standard deviation sigma of its distribution.
+#   mean  : the mean of its distribution.
+#   sd    : the standard deviation of its distribution.
 # RETURNS      : The z value(s).
 # EXAMPLE      :  (students A and B)
 #   standardize(8.5, mean = 7.9, sd = 0.8)    # 0.75
@@ -1048,8 +1065,8 @@ standardize <- function(value, mean, sd) {
 #                and (population) standard deviation from the data itself.
 # FORMULA      : z_i = (x_i - mu) / sigma
 # PARAMETERS   :
-#   x : raw data, or the different values x_i.
-#   n : (optional) frequencies n_i (used to compute mu and sigma).
+#   x : raw data, or the different values.
+#   n : (optional) the absolute frequency of each value (used to compute the mean and the standard deviation).
 # RETURNS      : Vector with z_i (one per element of x).
 # EXAMPLE      :  standardize_data(c(12, 10, 9, 9, 10))
 # -----------------------------------------------------------------------------
@@ -1066,8 +1083,8 @@ standardize_data <- function(x, n = NULL) {
 #                Not defined if the mean is 0.
 # FORMULA      : CV = sigma / |mu|      (x 100 if in percentage)
 # PARAMETERS   :
-#   x       : raw data, or the different values x_i.
-#   n       : (optional) frequencies n_i.
+#   x       : raw data, or the different values.
+#   n       : (optional) how many times each one appears (its frequency).
 #   percent : TRUE (default) gives it in %, FALSE as a ratio.
 # RETURNS      : One number.
 # EXAMPLE      :  coefficient_of_variation(c(12, 10, 9, 9, 10))   # 10.95445 %
@@ -1080,11 +1097,11 @@ coefficient_of_variation <- function(x, n = NULL, percent = TRUE) {
 # -----------------------------------------------------------------------------
 # coefficient_of_variation_from_values(sd, mean, percent = TRUE)
 # -----------------------------------------------------------------------------
-# WHAT IT DOES : Same coefficient, when you ALREADY KNOW sigma and mu.
+# WHAT IT DOES : Same coefficient, when you ALREADY KNOW the standard deviation and the mean.
 # FORMULA      : CV = sigma / |mu|      (x 100 if in percentage)
 # PARAMETERS   :
-#   sd      : standard deviation sigma.
-#   mean    : mean mu (must not be 0).
+#   sd      : standard deviation the standard deviation.
+#   mean    : mean the mean (must not be 0).
 #   percent : TRUE (default) -> %, FALSE -> ratio.
 # RETURNS      : One number.
 # EXAMPLE      :  (TV tubes)
@@ -1108,15 +1125,15 @@ coefficient_of_variation_from_values <- function(sd, mean, percent = TRUE) {
 # WHAT IT DOES : Moment of order r with respect to a point c.
 # FORMULA      : m_r(c) = sum(n_i * (x_i - c)^r) / N
 # PARAMETERS   :
-#   x : raw data, or the different values x_i.
+#   x : raw data, or the different values.
 #   r : the order (0, 1, 2, 3, ...).
 #   c : the point (a number), e.g. the median.
-#   n : (optional) frequencies n_i.
+#   n : (optional) how many times each one appears (its frequency).
 # RETURNS      : One number.
 # EXAMPLE      :  (slide 64, Me = 2.5)
 #   d <- c(0, 0, 2, 2, 2, 2, 3, 3, 4, 4, 7, 7)
 #   moment_about_point(d, 1, median_value(d))    # m1(Me) = 0.5
-#   moment_about_point(d, 2, median_value(d))    # m2(Me) = 5.083333
+#   moment_about_point(d, 2, median_value(d))    # m2(Me) = 4.916667
 # -----------------------------------------------------------------------------
 moment_about_point <- function(x, r, c, n = NULL) {
   n <- freq_or_ones(x, n)
@@ -1127,12 +1144,12 @@ moment_about_point <- function(x, r, c, n = NULL) {
 # ordinary_moment(x, r, n = NULL)
 # -----------------------------------------------------------------------------
 # WHAT IT DOES : Ordinary moment of order r = moment about c = 0 = mean of
-#                the r-th powers.   m0 = 1,  m1 = mean,  m2 = sigma^2 + mu^2.
+#                the r-th powers.   m0 = 1,  m1 = mean,  m2 = the variance + the mean^2.
 # FORMULA      : m_r = sum(n_i * x_i^r) / N
 # PARAMETERS   :
-#   x : raw data, or the different values x_i.
+#   x : raw data, or the different values.
 #   r : the order (0, 1, 2, 3, ...).
-#   n : (optional) frequencies n_i.
+#   n : (optional) how many times each one appears (its frequency).
 # RETURNS      : One number.
 # EXAMPLE      :  ordinary_moment(c(12, 10, 9, 9, 10), 2)    # 101.2
 # -----------------------------------------------------------------------------
@@ -1147,9 +1164,9 @@ ordinary_moment <- function(x, r, n = NULL) {
 #                mu_0 = 1,  mu_1 = 0,  mu_2 = variance.
 # FORMULA      : mu_r = sum(n_i * (x_i - mu)^r) / N
 # PARAMETERS   :
-#   x : raw data, or the different values x_i.
+#   x : raw data, or the different values.
 #   r : the order (0, 1, 2, 3, ...).
-#   n : (optional) frequencies n_i.
+#   n : (optional) how many times each one appears (its frequency).
 # RETURNS      : One number.
 # EXAMPLE      :  central_moment(c(12, 10, 9, 9, 10), 2)    # 1.2 (= variance)
 # -----------------------------------------------------------------------------
@@ -1164,7 +1181,7 @@ central_moment <- function(x, r, n = NULL) {
 # -----------------------------------------------------------------------------
 # WHAT THEY DO : Compute central moments using ONLY ordinary moments
 #                (useful for Big Data: ordinary moments can be computed in
-#                parallel / incrementally). Remember m1 = mu.
+#                parallel / incrementally). Remember m1 = the mean.
 # FORMULAS     : mu_2 = m2 - mu^2
 #                mu_3 = m3 - 3*m2*mu + 2*mu^3
 #                mu_4 = m4 - 4*m3*mu + 6*m2*mu^2 - 3*mu^4
@@ -1201,13 +1218,13 @@ central_moment4_from_ordinary <- function(m1, m2, m3, m4) {
 #                > 0 right/positive skew, = 0 symmetric, < 0 left/negative.
 # FORMULA      : A_P = (mu - Mo) / sigma
 # PARAMETERS   :
-#   x    : raw data, or the different values x_i.
-#   n    : (optional) frequencies n_i.
+#   x    : raw data, or the different values.
+#   n    : (optional) how many times each one appears (its frequency).
 #   mode : (optional) the mode to use. If empty it is computed with
 #          mode_value(). If the data have SEVERAL modes you MUST choose one
 #          and give it here; if there is NO mode the result is NA.
 # RETURNS      : One number.
-# EXAMPLE      :  pearson_skewness(c(1, 2, 2, 2, 3, 4, 9))    # 0.5725 (> 0: right)
+# EXAMPLE      :  pearson_skewness(c(1, 2, 2, 2, 3, 4, 9))    # 0.5162 (> 0: right)
 # -----------------------------------------------------------------------------
 pearson_skewness <- function(x, n = NULL, mode = NULL) {
   if (is.null(mode)) {
@@ -1227,10 +1244,10 @@ pearson_skewness <- function(x, n = NULL, mode = NULL) {
 #                > 0 right/positive skew, = 0 symmetric, < 0 left/negative.
 # FORMULA      : g1 = mu_3 / sigma^3
 # PARAMETERS   :
-#   x : raw data, or the different values x_i.
-#   n : (optional) frequencies n_i.
+#   x : raw data, or the different values.
+#   n : (optional) how many times each one appears (its frequency).
 # RETURNS      : One number.
-# EXAMPLE      :  fisher_skewness(c(1, 2, 2, 2, 3, 4, 9))    # 1.6545 (> 0: right)
+# EXAMPLE      :  fisher_skewness(c(1, 2, 2, 2, 3, 4, 9))    # 1.5587 (> 0: right)
 # -----------------------------------------------------------------------------
 fisher_skewness <- function(x, n = NULL) {
   central_moment(x, 3, n) / standard_deviation(x, n)^3
@@ -1246,8 +1263,8 @@ fisher_skewness <- function(x, n = NULL) {
 #                > 0 leptokurtic (more peaked).
 # FORMULA      : g2 = mu_4 / sigma^4 - 3
 # PARAMETERS   :
-#   x : raw data, or the different values x_i.
-#   n : (optional) frequencies n_i.
+#   x : raw data, or the different values.
+#   n : (optional) how many times each one appears (its frequency).
 # RETURNS      : One number.
 # EXAMPLE      :  kurtosis_coefficient(c(1, 2, 3, 4, 5))    # -1.3 (platykurtic)
 # -----------------------------------------------------------------------------
@@ -1299,8 +1316,8 @@ interpret_kurtosis <- function(value, tolerance = 1e-8) {
 # WHAT IT DOES : Computes (almost) every statistic of the chapter at once
 #                and prints them in a readable list. Handy to check exercises.
 # PARAMETERS   :
-#   x : raw numeric data, or the different values x_i (or class marks).
-#   n : (optional) frequencies n_i.
+#   x : raw numeric data, or the different values (or class marks).
+#   n : (optional) how many times each one appears (its frequency).
 # RETURNS      : A named list with all the results (also printed).
 # EXAMPLE      :  describe_all(c(2, 5, 3, 4, 7, 0, 11, 2, 3, 8))
 # -----------------------------------------------------------------------------

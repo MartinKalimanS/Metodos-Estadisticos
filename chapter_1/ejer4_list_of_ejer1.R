@@ -22,8 +22,8 @@ print(Me)
 Mo <- table$data[which.max(table$absolut_freqs)]
 print(Mo)
 
-Q1 <- quantile(expanded_table, 0.25)
+Q1 <- quantile(expanded_table, 0.25, type = 1)
 print(Q1)
 
-Q3 <- quantile(expanded_table, 0.75)
+Q3 <- quantile(expanded_table, 0.75, type = 1)
 print(Q3)
