@@ -1,6 +1,3 @@
-##SOURCE PARA IMPORTAR LA LIBRERIA 
-## source("chapter_1/formulas_chapter1.R")
-
 # =============================================================================
 #  CHAPTER 1 - DESCRIPTIVE STATISTICS OF ONE VARIABLE
 #  One R function for every formula / concept in the slides.
@@ -44,6 +41,16 @@
 #  sd() divide by n-1 -> they correspond to sample_quasi_variance() and
 #  sample_quasi_sd() here, NOT to variance().
 #
+#  QUICK GUIDE: ONE CALL PER EXERCISE TYPE  (read this first!)
+#  -----------------------------------------------------------
+#   Data as a list / frequency table / categories -> describe_data(x, n)
+#   Data given in INTERVALS                       -> describe_intervals(limits, n)
+#   Compare two scores from different groups      -> compare_scores(...)
+#   Compare variability of two groups             -> compare_variation(...)
+#  Each prints a complete English report (table, mean, median, quartiles,
+#  variance, skewness, kurtosis, moments...) and draws the plot.
+#  The individual functions below are still available for single values.
+#
 #  INDEX (in order of the slides)
 #  -------------------------------
 #  1. FREQUENCIES
@@ -79,9 +86,20 @@
 #  9. SHAPE (SKEWNESS & KURTOSIS)
 #       pearson_skewness, fisher_skewness, kurtosis_coefficient,
 #       interpret_skewness, interpret_kurtosis
+#  0. MAIN FUNCTIONS (one call = full answer)
+#       describe_data, describe_intervals, compare_scores, compare_variation
 #  10. EVERYTHING AT ONCE
 #       describe_all
 # =============================================================================
+
+# -----------------------------------------------------------------------------
+# FULL PRECISION (no rounding anywhere)
+# -----------------------------------------------------------------------------
+# No function in this file rounds its result. But R itself only DISPLAYS 7
+# significant digits by default (e.g. it shows 2.072254 for 2.07225390651...).
+# This line makes R display up to 15 significant digits for everything you
+# print in this session, so you can copy the complete result.
+options(digits = 15)
 
 
 # -----------------------------------------------------------------------------
@@ -101,6 +119,474 @@ freq_or_ones <- function(x, n = NULL) {
   if (length(x) != length(n)) stop("`x` and `n` must have the same length.")
   n
 }
+
+
+# =============================================================================
+# 0. MAIN FUNCTIONS (ONE CALL = FULL ANSWER)
+# =============================================================================
+# =============================================================================
+# 0. MAIN FUNCTIONS - START HERE
+#    One call gives you the whole answer: the frequency table, the center,
+#    the spread, the shape, the moments and the graph. All the numbers are
+#    printed with ALL their decimals (nothing is rounded) and the same
+#    numbers are returned in a list, e.g.   res <- describe_data(x);  res$mean
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# describe_data(x, n = NULL, name = NULL, percentiles = NULL, plot = TRUE)
+# -----------------------------------------------------------------------------
+# WHAT IT DOES : Complete analysis of ONE variable, in a single call. Use it
+#                when you have the raw data, OR the different values with
+#                how many times each appears, OR a qualitative variable
+#                (text categories). It prints, in plain English:
+#                  - the frequency table (absolute, relative and cumulative),
+#                  - the center (mean, median, mode, quadratic mean),
+#                  - the position (minimum, maximum, quartiles, and any
+#                    percentiles you ask for),
+#                  - the spread (range, interquartile range, mean deviation,
+#                    variance and standard deviation, BOTH dividing by N and
+#                    dividing by N - 1, coefficient of variation),
+#                  - the shape (skewness and kurtosis, with their meaning),
+#                  - the ordinary and central moments,
+#                and draws the graph (bar diagram, or histogram when there are
+#                many different values; bar and pie chart for categories).
+#                For data given in INTERVALS use describe_intervals() instead.
+# PARAMETERS   :
+#   x           : the raw data, or the different values of the variable (or
+#                 text categories).
+#   n           : (optional) how many times each value in `x` appears. Leave
+#                 it out when `x` is the raw data.
+#   name        : (optional) the name of the variable, for the titles.
+#   percentiles : (optional) extra percentiles you want, e.g. c(10, 90).
+#   plot        : TRUE draws the graph, FALSE does not.
+# RETURNS      : (invisibly) a list with every number printed: $N, $table,
+#                $mean, $median, $modes, $quadratic_mean, $minimum, $maximum,
+#                $range, $q1, $q3, $iqr, $percentiles, $mean_deviation,
+#                $variance, $sd, $sample_variance, $sample_sd, $cv_percent,
+#                $pearson_skewness, $fisher_skewness, $kurtosis,
+#                $ordinary_moments, $central_moments.
+# EXAMPLE      :
+#   describe_data(c(6, 8, 6, 8, 6, 12, 6, 8, 8, 12))      # raw data
+#   describe_data(c(6, 8, 12), n = c(4, 4, 2))             # values + frequencies
+#   describe_data(c("red", "blue", "red", "green"))        # categories
+#   describe_data(c(2, 5, 3, 4, 7, 0, 11), percentiles = c(10, 90))
+# -----------------------------------------------------------------------------
+describe_data <- function(x, n = NULL, name = NULL, percentiles = NULL,
+                          plot = TRUE) {
+  if (is.null(name)) {
+    name <- variable_label(paste(deparse(substitute(x)), collapse = ""), "the data")
+  }
+  if (is.factor(x) || is.logical(x)) x <- as.character(x)
+  data <- expand_data(x, n)
+  N <- length(data)
+  if (!is.numeric(data)) return(invisible(describe_categories(data, name, plot)))
+  
+  ft <- frequency_table(data)
+  freq_table <- data.frame(value = ft$xi, absolute = ft$ni, relative = ft$fi,
+                           cum_absolute = ft$Ni, cum_relative = ft$Fi)
+  modes <- mode_value(data)
+  no_mode <- length(modes) == 1 && is.na(modes)
+  
+  res <- list(N = N, table = freq_table)
+  res$mean           <- arithmetic_mean(data)
+  res$median         <- median_value(data)
+  res$modes          <- modes
+  res$quadratic_mean <- quadratic_mean(data)
+  res$minimum        <- min(data)
+  res$maximum        <- max(data)
+  res$range          <- range_value(data)
+  res$q1             <- quartile(data, 1)
+  res$q3             <- quartile(data, 3)
+  res$iqr            <- interquartile_range(data)
+  if (!is.null(percentiles)) {
+    res$percentiles <- setNames(sapply(percentiles, function(k) percentile(data, k)),
+                                paste0("P", percentiles))
+  }
+  res$mean_deviation <- mean_deviation(data)
+  res$variance       <- variance(data)
+  res$sd             <- standard_deviation(data)
+  res$sample_variance <- if (N > 1) sample_quasi_variance(data) else NA
+  res$sample_sd       <- if (N > 1) sample_quasi_sd(data) else NA
+  res$cv_percent      <- if (res$mean != 0) coefficient_of_variation(data) else NA
+  res$ordinary_moments <- setNames(sapply(1:4, function(r) ordinary_moment(data, r)),
+                                   paste0("order_", 1:4))
+  res$central_moments  <- setNames(sapply(2:4, function(r) central_moment(data, r)),
+                                   paste0("order_", 2:4))
+  has_shape <- res$sd > 0
+  res$pearson_skewness <- if (has_shape && length(modes) == 1 && !no_mode)
+    pearson_skewness(data, mode = modes) else NA
+  res$fisher_skewness  <- if (has_shape) fisher_skewness(data) else NA
+  res$kurtosis         <- if (has_shape) kurtosis_coefficient(data) else NA
+  
+  report_title(paste0("DESCRIPTIVE STATISTICS: ", name))
+  report_line("Number of observations (N)", N)
+  report_section("Frequency table")
+  if (nrow(freq_table) <= 40) {
+    print(freq_table, row.names = FALSE, digits = 15)
+    cat("  (absolute = how many times the value appears; relative = absolute / N;\n",
+        "   cum_ = running total up to that value)\n", sep = "")
+  } else {
+    cat("  (", nrow(freq_table), " different values: table not printed. It is in ",
+        "$table. For a short table, group the data with describe_intervals().)\n",
+        sep = "")
+  }
+  report_section("Center")
+  report_line("Mean (average)", res$mean)
+  report_line("Median (middle value)", res$median)
+  report_line("Mode (most frequent value)",
+              if (no_mode) "none (every value appears the same number of times)"
+              else modes)
+  report_line("Quadratic mean (root of the mean of the squares)", res$quadratic_mean)
+  report_section("Position")
+  report_line("Minimum", res$minimum)
+  report_line("Maximum", res$maximum)
+  report_line("First quartile Q1 (25% of the data is below)", res$q1)
+  report_line("Third quartile Q3 (75% of the data is below)", res$q3)
+  if (!is.null(percentiles)) {
+    for (i in seq_along(percentiles)) {
+      report_line(paste0("Percentile ", percentiles[i], " (", percentiles[i],
+                         "% of the data is below)"), res$percentiles[i])
+    }
+  }
+  report_section("Spread")
+  report_line("Range (maximum - minimum)", res$range)
+  report_line("Interquartile range (Q3 - Q1)", res$iqr)
+  report_line("Mean deviation (average distance to the mean)", res$mean_deviation)
+  report_line("Variance (divides by N)", res$variance)
+  report_line("Standard deviation (divides by N)", res$sd)
+  report_line("Sample variance (divides by N - 1, same as R's var())", res$sample_variance)
+  report_line("Sample standard deviation (divides by N - 1, R's sd())", res$sample_sd)
+  report_line("Coefficient of variation (standard deviation / |mean|, in %)", res$cv_percent)
+  report_shape(res$pearson_skewness, res$fisher_skewness, res$kurtosis, has_shape,
+               "the mode")
+  report_moments(res$ordinary_moments, res$central_moments)
+  
+  if (plot) {
+    if (nrow(freq_table) <= 30) {
+      plot_dot_diagram(freq_table$value, freq_table$absolute,
+                       main = paste("Absolute frequencies:", name))
+    } else {
+      hist(data, main = paste("Histogram:", name), xlab = name,
+           ylab = "Frequency", col = "khaki1")
+    }
+  }
+  invisible(res)
+}
+
+# -----------------------------------------------------------------------------
+# describe_intervals(limits = NULL, n = NULL, data = NULL, lower = NULL,
+#                    upper = NULL, name = NULL, percentiles = NULL,
+#                    right_closed = TRUE, plot = TRUE)
+# -----------------------------------------------------------------------------
+# WHAT IT DOES : Complete analysis of ONE continuous variable GROUPED IN
+#                INTERVALS, in a single call. You give the intervals and
+#                either their frequencies or the raw data, and it prints in
+#                plain English: the frequency table (class mark, width,
+#                absolute / relative / cumulative frequency, histogram
+#                height), the center (mean, median, modal interval,
+#                quadratic mean), the position (quartiles and any percentiles
+#                you ask for), the spread (variance and standard deviation
+#                dividing by N and by N - 1, mean deviation, coefficient of
+#                variation), the shape (skewness and kurtosis), the moments,
+#                and draws the histogram with the frequency polygon.
+#                As in the slides, the mean, variance, moments, skewness and
+#                kurtosis use the CLASS MARK (midpoint) of each interval as
+#                its value, while the median, quartiles and percentiles use
+#                the grouped-data interpolation formulas.
+# PARAMETERS   :
+#   limits       : the interval limits written in order, one more than the
+#                  number of intervals. For 0-5, 5-10, 10-15 write
+#                  c(0, 5, 10, 15).
+#   n            : the absolute frequency of each interval (how many data fall
+#                  in it). Leave it out if you give the raw `data`.
+#   data         : (optional) the raw data. Then the function counts how many
+#                  fall in each interval for you.
+#   lower, upper : alternative to `limits`: the lower and the upper limit of
+#                  each interval (only needed if you prefer to type them so).
+#   name         : (optional) name of the variable, for the titles.
+#   percentiles  : (optional) extra percentiles you want, e.g. c(10, 90).
+#   right_closed : TRUE (default, the slides' convention) means the intervals
+#                  are (a, b], that is, the upper limit belongs to the
+#                  interval. FALSE means [a, b). It only matters when you give
+#                  raw `data` that fall exactly on a limit.
+#   plot         : TRUE draws the histogram and polygon, FALSE does not.
+# RETURNS      : (invisibly) a list with every number printed: $N, $table,
+#                $mean, $median, $modal_interval, $quadratic_mean, $q1, $q3,
+#                $iqr, $percentiles, $mean_deviation, $variance, $sd,
+#                $sample_variance, $sample_sd, $cv_percent,
+#                $pearson_skewness, $fisher_skewness, $kurtosis,
+#                $ordinary_moments, $central_moments.
+# EXAMPLE      :
+#   describe_intervals(c(0, 3, 6, 9, 12, 15), n = c(40, 30, 10, 5, 5))
+#   describe_intervals(c(0, 4, 6, 8, 12), n = c(7, 9, 7, 9), percentiles = 90)
+#   describe_intervals(c(40, 50, 60, 70, 80, 90, 100), data = exam_scores)
+# -----------------------------------------------------------------------------
+describe_intervals <- function(limits = NULL, n = NULL, data = NULL,
+                               lower = NULL, upper = NULL, name = NULL,
+                               percentiles = NULL, right_closed = TRUE,
+                               plot = TRUE) {
+  if (is.null(name)) name <- "the grouped data"
+  if (is.null(lower) || is.null(upper)) {
+    if (is.null(limits) || length(limits) < 2) {
+      stop("Give the interval limits, e.g. describe_intervals(c(0, 5, 10, 15), n = c(4, 7, 3)).")
+    }
+    lower <- limits[-length(limits)]
+    upper <- limits[-1]
+  }
+  k <- length(lower)
+  outside <- 0
+  if (is.null(n)) {
+    if (is.null(data)) stop("Give the frequencies `n` or the raw `data`.")
+    if (any(lower[-1] != upper[-k])) {
+      stop("To group raw `data` the intervals must be consecutive (each one starts where the previous ends).")
+    }
+    n <- group_into_intervals(data, c(lower, upper[k]), right_closed)$ni
+    outside <- length(data) - sum(n)
+  }
+  if (length(n) != k) stop("There must be one frequency in `n` per interval (", k, " intervals).")
+  N <- sum(n)
+  marks <- class_mark(lower, upper)
+  gt <- grouped_frequency_table(lower, upper, n)
+  freq_table <- data.frame(interval = interval_labels(lower, upper, right_closed),
+                           class_mark = gt$xi, width = gt$ai, absolute = gt$ni,
+                           relative = gt$fi, cum_absolute = gt$Ni,
+                           cum_relative = gt$Fi, height = gt$hi)
+  modal <- modal_interval(lower, upper, n)
+  one_mode <- nrow(modal) == 1
+  modal_mark <- if (one_mode) class_mark(modal$lower, modal$upper) else NA
+  
+  res <- list(N = N, table = freq_table)
+  res$mean           <- arithmetic_mean(marks, n)
+  res$median         <- median_grouped(lower, upper, n)
+  res$modal_interval <- modal
+  res$quadratic_mean <- quadratic_mean(marks, n)
+  res$q1             <- quartile_grouped(lower, upper, n, 1)
+  res$q3             <- quartile_grouped(lower, upper, n, 3)
+  res$iqr            <- res$q3 - res$q1
+  if (!is.null(percentiles)) {
+    res$percentiles <- setNames(sapply(percentiles,
+                                       function(k) percentile_grouped(lower, upper, n, k)),
+                                paste0("P", percentiles))
+  }
+  res$mean_deviation  <- mean_deviation(marks, n)
+  res$variance        <- variance(marks, n)
+  res$sd              <- standard_deviation(marks, n)
+  res$sample_variance <- if (N > 1) sample_quasi_variance(marks, n) else NA
+  res$sample_sd       <- if (N > 1) sample_quasi_sd(marks, n) else NA
+  res$cv_percent      <- if (res$mean != 0) coefficient_of_variation(marks, n) else NA
+  res$ordinary_moments <- setNames(sapply(1:4, function(r) ordinary_moment(marks, r, n)),
+                                   paste0("order_", 1:4))
+  res$central_moments  <- setNames(sapply(2:4, function(r) central_moment(marks, r, n)),
+                                   paste0("order_", 2:4))
+  has_shape <- res$sd > 0
+  res$pearson_skewness <- if (has_shape && one_mode)
+    pearson_skewness(marks, n, mode = modal_mark) else NA
+  res$fisher_skewness  <- if (has_shape) fisher_skewness(marks, n) else NA
+  res$kurtosis         <- if (has_shape) kurtosis_coefficient(marks, n) else NA
+  
+  report_title(paste0("DESCRIPTIVE STATISTICS (GROUPED IN INTERVALS): ", name))
+  report_line("Number of observations (N)", N)
+  if (outside > 0) {
+    cat("  WARNING: ", outside, " of your data fall outside the intervals and are not counted.\n", sep = "")
+  }
+  cat("  Intervals are ", if (right_closed) "closed on the right: (a, b]  (the first one also includes a)"
+      else "closed on the left: [a, b)  (the last one also includes b)", "\n", sep = "")
+  report_section("Frequency table")
+  print(freq_table, row.names = FALSE, digits = 15)
+  cat("  (class_mark = midpoint of the interval; height = absolute / width, the\n",
+      "   height of the histogram bar; cum_ = running total up to that interval)\n", sep = "")
+  report_section("Center")
+  report_line("Mean (using the class marks)", res$mean)
+  report_line("Median (grouped-data formula)", res$median)
+  if (one_mode) {
+    report_line("Modal interval (highest histogram bar)", interval_labels(modal$lower, modal$upper, right_closed))
+    report_line("   its class mark (used as the mode)", modal_mark)
+  } else {
+    report_line("Modal interval (highest histogram bar)",
+                paste("several tie:", paste(interval_labels(modal$lower, modal$upper, right_closed), collapse = " ")))
+  }
+  report_line("Quadratic mean (root of the mean of the squares)", res$quadratic_mean)
+  report_section("Position")
+  report_line("Lowest limit of the intervals", lower[1])
+  report_line("Highest limit of the intervals", upper[k])
+  report_line("First quartile Q1 (25% of the data is below)", res$q1)
+  report_line("Third quartile Q3 (75% of the data is below)", res$q3)
+  if (!is.null(percentiles)) {
+    for (i in seq_along(percentiles)) {
+      report_line(paste0("Percentile ", percentiles[i], " (", percentiles[i],
+                         "% of the data is below)"), res$percentiles[i])
+    }
+  }
+  report_section("Spread")
+  report_line("Interquartile range (Q3 - Q1)", res$iqr)
+  report_line("Mean deviation (average distance to the mean)", res$mean_deviation)
+  report_line("Variance (divides by N)", res$variance)
+  report_line("Standard deviation (divides by N)", res$sd)
+  report_line("Sample variance (divides by N - 1, same as R's var())", res$sample_variance)
+  report_line("Sample standard deviation (divides by N - 1, R's sd())", res$sample_sd)
+  report_line("Coefficient of variation (standard deviation / |mean|, in %)", res$cv_percent)
+  report_shape(res$pearson_skewness, res$fisher_skewness, res$kurtosis, has_shape,
+               "the class mark of the modal interval")
+  report_moments(res$ordinary_moments, res$central_moments)
+  
+  if (plot) {
+    plot_histogram(lower, upper, n, main = paste("Histogram and frequency polygon:", name))
+    plot_frequency_polygon(lower, upper, n, add = TRUE)
+  }
+  invisible(res)
+}
+
+# -----------------------------------------------------------------------------
+# compare_scores(value_A, mean_A, sd_A, value_B, mean_B, sd_B,
+#                name_A = "A", name_B = "B")
+# -----------------------------------------------------------------------------
+# WHAT IT DOES : Compares two scores that come from DIFFERENT scales (for
+#                example the same student in two exams with different
+#                averages). It converts each score into "how many standard
+#                deviations is it above the mean" (the standardized score,
+#                or z-score) and tells you which one is relatively better.
+# FORMULA      : z = (value - mean) / standard deviation
+# PARAMETERS   :
+#   value_A, mean_A, sd_A : the score, the mean and the standard deviation of
+#                           the group it belongs to (A).
+#   value_B, mean_B, sd_B : the same for B.
+#   name_A, name_B        : (optional) names to print.
+# RETURNS      : (invisibly) list with $z_A, $z_B and $better.
+# EXAMPLE      :
+#   compare_scores(78, 70, 6, 65, 58, 4, "Student A", "Student B")
+# -----------------------------------------------------------------------------
+compare_scores <- function(value_A, mean_A, sd_A, value_B, mean_B, sd_B,
+                           name_A = "A", name_B = "B") {
+  z_A <- standardize(value_A, mean_A, sd_A)
+  z_B <- standardize(value_B, mean_B, sd_B)
+  better <- if (z_A > z_B) name_A else if (z_B > z_A) name_B else "tie"
+  report_title("COMPARISON OF SCORES FROM DIFFERENT SCALES")
+  report_line(paste0("Standardized score of ", name_A,
+                     " (standard deviations above the mean)"), z_A)
+  report_line(paste0("Standardized score of ", name_B,
+                     " (standard deviations above the mean)"), z_B)
+  report_line("Relatively better score", better)
+  invisible(list(z_A = z_A, z_B = z_B, better = better))
+}
+
+# -----------------------------------------------------------------------------
+# compare_variation(mean_A, sd_A, mean_B, sd_B, name_A = "A", name_B = "B")
+# -----------------------------------------------------------------------------
+# WHAT IT DOES : Compares how spread out two data sets are RELATIVE to their
+#                size, using the coefficient of variation (standard deviation
+#                divided by the absolute value of the mean, in %). Use it when
+#                the two sets have different means or different units, where
+#                comparing the standard deviations directly is not fair.
+# FORMULA      : CV = 100 * standard deviation / |mean|
+# PARAMETERS   :
+#   mean_A, sd_A : mean and standard deviation of the first data set.
+#   mean_B, sd_B : mean and standard deviation of the second data set.
+#   name_A, name_B : (optional) names to print.
+# RETURNS      : (invisibly) list with $cv_A, $cv_B and $more_dispersed.
+# EXAMPLE      :
+#   compare_variation(45, 9, 90, 15, "Department A", "Department B")
+# -----------------------------------------------------------------------------
+compare_variation <- function(mean_A, sd_A, mean_B, sd_B, name_A = "A", name_B = "B") {
+  cv_A <- coefficient_of_variation_from_values(sd_A, mean_A)
+  cv_B <- coefficient_of_variation_from_values(sd_B, mean_B)
+  more <- if (cv_A > cv_B) name_A else if (cv_B > cv_A) name_B else "tie"
+  report_title("COMPARISON OF RELATIVE SPREAD")
+  report_line(paste0("Coefficient of variation of ", name_A, " (%)"), cv_A)
+  report_line(paste0("Coefficient of variation of ", name_B, " (%)"), cv_B)
+  report_line("Has more relative spread", more)
+  report_line("Larger standard deviation in absolute terms",
+              if (sd_A > sd_B) name_A else if (sd_B > sd_A) name_B else "tie")
+  invisible(list(cv_A = cv_A, cv_B = cv_B, more_dispersed = more))
+}
+
+# -----------------------------------------------------------------------------
+# INTERNAL HELPERS used by the functions above (you never call these yourself)
+# -----------------------------------------------------------------------------
+# full_digits()      writes numbers with ALL their digits (up to 15), never
+#                    rounded to a few decimals.
+# variable_label()   turns what you typed (e.g. pares$x) into a short name.
+# interval_labels()  writes the intervals as "[0, 4]", "(4, 6]", ...
+# report_*()         print the titles, sections and "label: value" lines.
+# describe_categories() is describe_data() for text categories.
+# -----------------------------------------------------------------------------
+full_digits <- function(v) {
+  if (is.character(v)) return(v)
+  unname(vapply(v, function(z) {
+    if (is.na(z)) "NA" else format(z, digits = 15, scientific = FALSE, trim = TRUE)
+  }, character(1)))
+}
+
+variable_label <- function(expr_text, default) {
+  s <- sub("^.*\\$", "", expr_text)
+  if (nchar(s) > 25 || grepl("[()]", s)) default else s
+}
+
+interval_labels <- function(lower, upper, right_closed = TRUE) {
+  k <- length(lower)
+  open  <- rep(if (right_closed) "(" else "[", k)
+  close <- rep(if (right_closed) "]" else ")", k)
+  if (right_closed) open[1] <- "[" else close[k] <- "]"
+  paste0(open, full_digits(lower), ", ", full_digits(upper), close)
+}
+
+report_title <- function(text) {
+  cat("\n", strrep("=", 72), "\n ", text, "\n", strrep("=", 72), "\n", sep = "")
+}
+report_section <- function(text) cat("\n--- ", text, " ---\n", sep = "")
+report_line <- function(label, value) {
+  cat(sprintf("  %-62s %s\n", paste0(label, ":"),
+              paste(full_digits(value), collapse = ", ")))
+}
+
+report_shape <- function(pearson, fisher, kurt, has_shape, mode_text) {
+  report_section("Shape")
+  if (!has_shape) {
+    cat("  (all the values are equal: skewness and kurtosis are not defined)\n")
+    return(invisible(NULL))
+  }
+  if (is.na(pearson)) {
+    report_line("Pearson skewness", "not available (needs a single mode)")
+  } else {
+    report_line(paste0("Pearson skewness (mean - mode) / sd, mode = ", mode_text), pearson)
+    cat(sprintf("  %-62s %s\n", "", paste("->", interpret_skewness(pearson))))
+  }
+  report_line("Fisher skewness (third central moment / sd^3)", fisher)
+  cat(sprintf("  %-62s %s\n", "", paste("->", interpret_skewness(fisher))))
+  report_line("Kurtosis (fourth central moment / sd^4 - 3)", kurt)
+  cat(sprintf("  %-62s %s\n", "", paste("->", interpret_kurtosis(kurt))))
+}
+
+report_moments <- function(ordinary, central) {
+  report_section("Moments")
+  for (r in 1:4) report_line(paste0("Ordinary moment of order ", r, " (mean of x^", r, ")"),
+                             ordinary[r])
+  for (r in 2:4) report_line(paste0("Central moment of order ", r,
+                                    " (mean of (x - mean)^", r, ")"), central[r - 1])
+}
+
+describe_categories <- function(data, name, plot) {
+  N <- length(data)
+  counts <- table(data)
+  freq_table <- data.frame(category = names(counts), absolute = as.numeric(counts),
+                           relative = as.numeric(counts) / N)
+  modes <- mode_value(data)
+  no_mode <- length(modes) == 1 && is.na(modes)
+  report_title(paste0("DESCRIPTIVE STATISTICS (CATEGORIES): ", name))
+  report_line("Number of observations (N)", N)
+  report_section("Frequency table")
+  print(freq_table, row.names = FALSE, digits = 15)
+  cat("  (absolute = how many times it appears; relative = absolute / N)\n")
+  report_section("Center")
+  report_line("Mode (most frequent category)",
+              if (no_mode) "none (every category appears the same number of times)" else modes)
+  if (plot) {
+    old <- par(mfrow = c(1, 2)); on.exit(par(old))
+    plot_bar_chart(freq_table$category, freq_table$absolute, main = paste("Bar chart:", name))
+    plot_pie_chart(freq_table$category, freq_table$absolute, main = paste("Pie chart:", name))
+  }
+  invisible(list(N = N, table = freq_table, modes = modes))
+}
+
 
 
 # =============================================================================
@@ -224,8 +710,8 @@ frequency_table <- function(data) {
 # WHAT IT DOES : Width (amplitude) of each interval.
 # FORMULA      : a_i = L_i - L_{i-1}
 # PARAMETERS   :
-#   lower : vector with the lower limits the lower limit of the interval of the intervals.
-#   upper : vector with the upper limits the upper limit of the interval   of the intervals.
+#   lower : vector with the lower limit of each interval.
+#   upper : vector with the upper limit of each interval.
 # RETURNS      : Numeric vector with the interval width.
 # EXAMPLE      :  (cafeteria example: 0-3, 3-6, 6-9, 9-12, 12-15)
 #   interval_width(c(0,3,6,9,12), c(3,6,9,12,15))     # 3 3 3 3 3
@@ -241,8 +727,8 @@ interval_width <- function(lower, upper) {
 #                value that represents the interval in all calculations.
 # FORMULA      : x_i = (L_{i-1} + L_i) / 2
 # PARAMETERS   :
-#   lower : vector of lower limits the lower limit of the interval.
-#   upper : vector of upper limits the upper limit of the interval.
+#   lower : vector with the lower limit of each interval.
+#   upper : vector with the upper limit of each interval.
 # RETURNS      : Numeric vector with each value.
 # EXAMPLE      :
 #   class_mark(c(0,3,6,9,12), c(3,6,9,12,15))   # 1.5 4.5 7.5 10.5 13.5
@@ -262,8 +748,8 @@ class_mark <- function(lower, upper) {
 #                Both give the same shape (slide "Note on Histograms").
 # PARAMETERS   :
 #   n        : vector with the absolute frequency of each interval.
-#   lower    : vector of lower limits the lower limit of the interval.
-#   upper    : vector of upper limits the upper limit of the interval.
+#   lower    : vector with the lower limit of each interval.
+#   upper    : vector with the upper limit of each interval.
 #   relative : FALSE (default) -> the absolute frequency/the interval width ;  TRUE -> the relative frequency/the interval width.
 # RETURNS      : Numeric vector with the histogram height.
 # EXAMPLE      :  (temperatures "But also" table)
@@ -316,8 +802,8 @@ group_into_intervals <- function(data, breaks, right_closed = TRUE) {
 #                lower | upper | each value (class mark) | the interval width | the absolute frequency | the relative frequency |
 #                the cumulative absolute frequency | the cumulative relative frequency | the histogram height (= the absolute frequency / the interval width)
 # PARAMETERS   :
-#   lower : vector of lower limits the lower limit of the interval.
-#   upper : vector of upper limits the upper limit of the interval.
+#   lower : vector with the lower limit of each interval.
+#   upper : vector with the upper limit of each interval.
 #   n     : vector of absolute how many times each one appears (its frequency).
 # RETURNS      : data.frame with all those columns.
 # EXAMPLE      :
@@ -489,7 +975,7 @@ arithmetic_mean <- function(x, n = NULL) {
 # -----------------------------------------------------------------------------
 # WHAT IT DOES : Sample mean x-bar. It is computed exactly like the
 #                arithmetic mean; it is the best estimator of the
-#                population mean the mean. (Exists only so the name matches
+#                population mean. (Exists only so the name matches
 #                the slide "Sample Mean and Variance".)
 # FORMULA      : x_bar = sum(x_i * n_i) / n
 # PARAMETERS   : same as arithmetic_mean().
@@ -752,10 +1238,12 @@ percentile <- function(x, k, n = NULL) {
 # -----------------------------------------------------------------------------
 quantile_grouped <- function(lower, upper, n, c) {
   if (c <= 0 || c >= 1) stop("`c` must be strictly between 0 and 1.")
-  cN   <- round(c * sum(n), 10)
+  cN   <- c * sum(n)                    # exact value, used in the final formula
+  cN_locate <- round(cN, 10)            # only to pick the interval safely (so
+  # 28.999999999999996 counts as 29)
   Ni   <- cumsum(n)
   Nprev <- c(0, Ni[-length(Ni)])        # N_{i-1}
-  i    <- which(Nprev <= cN & cN < Ni)[1]
+  i    <- which(Nprev <= cN_locate & cN_locate < Ni)[1]
   a    <- interval_width(lower, upper)
   lower[i] + (cN - Nprev[i]) / n[i] * a[i]
 }
@@ -1100,8 +1588,8 @@ coefficient_of_variation <- function(x, n = NULL, percent = TRUE) {
 # WHAT IT DOES : Same coefficient, when you ALREADY KNOW the standard deviation and the mean.
 # FORMULA      : CV = sigma / |mu|      (x 100 if in percentage)
 # PARAMETERS   :
-#   sd      : standard deviation the standard deviation.
-#   mean    : mean the mean (must not be 0).
+#   sd      : the standard deviation.
+#   mean    : the mean (must not be 0).
 #   percent : TRUE (default) -> %, FALSE -> ratio.
 # RETURNS      : One number.
 # EXAMPLE      :  (TV tubes)
@@ -1345,7 +1833,10 @@ describe_all <- function(x, n = NULL) {
     fisher_skewness          = fisher_skewness(x, n),
     kurtosis                 = kurtosis_coefficient(x, n)
   )
-  for (nm in names(res)) cat(sprintf("%-26s: %s\n", nm,
-                                     paste(signif(res[[nm]], 7), collapse = ", ")))
+  for (nm in names(res)) {
+    shown <- vapply(res[[nm]], function(v) format(v, digits = 15, trim = TRUE),
+                    character(1))
+    cat(sprintf("%-26s: %s\n", nm, paste(shown, collapse = ", ")))
+  }
   invisible(res)
 }

@@ -10,8 +10,8 @@
 #  standard_deviation() from there instead of redefining them). Always source
 #  Chapter 1 FIRST, then this file:
 #
-#      source("chapter1_descriptive_stats.R")
-#      source("chapter2_statistical_modelling.R")
+#      source("formulas_chapter1.R")
+#      source("formulas_chapter2.R")
 #      pearson_correlation(c(1,2,3), c(2,4,5))   # 0.9819805
 #
 #  If you forget to source Chapter 1 first, this file will stop with a clear
@@ -41,6 +41,17 @@
 #  midpoint of each interval, from Chapter 1's `class_mark()`) as the value
 #  that represents that interval, exactly like in Chapter 1.
 #
+#  QUICK GUIDE: ONE CALL PER EXERCISE TYPE  (read this first!)
+#  -----------------------------------------------------------
+#   Two lists of numbers x, y                  -> linear_regression(x, y, n)
+#   A two-way table (values or intervals)      -> analyze_table(tab, x_limits=, y_limits=)
+#   Two regression lines given as equations    -> analyze_regression_lines("..", "..")
+#   Any formula typed as text ("y = a*x^2+b*x+c", "y = a*exp(b*x)",
+#   "z = a + b*x + c*y")                       -> fit_model("...")
+#  Each prints an English report with all decimals and draws the plot.
+#  Text-typed formulas with several data variables use fit_model(); for
+#  non-linear forms a*e^(bx), 1/(a+bx), a*x^b it linearises automatically.
+#
 #  INDEX (in the order of the slides)
 #  ------------------------------------
 #  1. JOINT FREQUENCY TABLES
@@ -62,15 +73,40 @@
 #       fit_hyperbolic, predict_hyperbolic,
 #       fit_power, predict_power
 #  6. MULTIPLE LINEAR REGRESSION
-#       multiple_regression, predict_multiple, polynomial_regression
+#       multiple_regression, predict_multiple, polynomial_regression,
+#       fit_model, predict_model       <- fit ANY model written as text,
+#                                         as in the exam, e.g.
+#                                         "y = a*x^2 + b*x + c"
 #  7. GRAPHS
 #       plot_regression_lines
 # =============================================================================
 
-if (!exists("arithmetic_mean") || !exists("variance") || !exists("standard_deviation")) {
+if (!exists("describe_data") && file.exists("formulas_chapter1.R")) {
+  source("formulas_chapter1.R")      # loads Chapter 1 automatically if it is in the same folder
+}
+if (!exists("arithmetic_mean") || !exists("variance") || !exists("describe_data")) {
   stop("Chapter 2 needs Chapter 1's functions. Run this first:\n",
-       '  source("chapter1_descriptive_stats.R")\n',
+       '  source("formulas_chapter1.R")\n',
        "and only then source this Chapter 2 file.")
+}
+
+# -----------------------------------------------------------------------------
+# FULL PRECISION (no rounding anywhere)
+# -----------------------------------------------------------------------------
+# No function in this file rounds its result. But R itself only DISPLAYS 7
+# significant digits by default, so this line makes R display up to 15 for
+# everything you print in this session (the same line as in Chapter 1).
+options(digits = 15)
+
+# INTERNAL HELPERS (you do not need to call these yourself): write numbers
+# with ALL their digits (up to 15 significant), never rounded to 4 decimals.
+full_digits <- function(v) {
+  unname(vapply(v, function(z) format(z, digits = 15, scientific = FALSE,
+                                      trim = TRUE), character(1)))
+}
+# the same, but with " + " or " - " in front (so we never print "+ -0.8")
+signed_full <- function(v) {
+  paste0(ifelse(v < 0, " - ", " + "), full_digits(abs(v)))
 }
 
 # -----------------------------------------------------------------------------
@@ -88,16 +124,17 @@ if (!exists("arithmetic_mean") || !exists("variance") || !exists("standard_devia
 # EXAMPLE      :
 #   regression_y_on_x(c(1,2,3,4,5), c(1,1,2,2,4))
 #   # Regression line R_Y/X (predicts Y from X)
-#   #   y = 0.4000 + 0.7000 * x
-#   #   intercept (a) = 0.4000
-#   #   slope     (b) = 0.7000
+#   #   y = -0.0999999999999996 + 0.7 * x
+#   #   intercept (a) = -0.0999999999999996
+#   #   slope     (b) = 0.7
+#   # (the intercept is -0.1 up to the tiny error of floating-point numbers)
 # -----------------------------------------------------------------------------
 print.stat_fit <- function(x, ...) {
   labels <- if (!is.null(x$labels)) x$labels else c("a", "b")
   cat(x$description, "\n")
   cat("  ", x$equation, "\n\n", sep = "")
-  cat(sprintf("  %-14s= %.4f\n", labels[1], x$a))
-  cat(sprintf("  %-14s= %.4f\n", labels[2], x$b))
+  cat(sprintf("  %-14s= %s\n", labels[1], full_digits(x$a)))
+  cat(sprintf("  %-14s= %s\n", labels[2], full_digits(x$b)))
   invisible(x)
 }
 
@@ -459,7 +496,7 @@ regression_y_on_x <- function(x, y, n = NULL) {
   a <- arithmetic_mean(y, n) - b * arithmetic_mean(x, n)
   structure(list(
     a = a, b = b, intercept = a, slope = b,
-    equation = sprintf("y = %.4f + %.4f * x", a, b),
+    equation = paste0("y = ", full_digits(a), signed_full(b), " * x"),
     description = "Regression line R_Y/X (predicts Y from X)",
     labels = c("intercept (a)", "slope     (b)")
   ), class = "stat_fit")
@@ -500,7 +537,7 @@ regression_x_on_y <- function(x, y, n = NULL) {
   a <- arithmetic_mean(x, n) - b * arithmetic_mean(y, n)
   structure(list(
     a = a, b = b, intercept = a, slope = b,
-    equation = sprintf("x = %.4f + %.4f * y", a, b),
+    equation = paste0("x = ", full_digits(a), signed_full(b), " * y"),
     description = "Regression line R_X/Y (predicts X from Y)",
     labels = c("intercept (a)", "slope     (b)")
   ), class = "stat_fit")
@@ -699,7 +736,7 @@ fit_exponential <- function(x, y) {
   a <- exp(A)
   structure(list(
     a = a, b = b,
-    equation = sprintf("y = %.4f * e^(%.4f * x)", a, b),
+    equation = paste0("y = ", full_digits(a), " * e^(", full_digits(b), " * x)"),
     description = "Exponential fit y = a * e^(b*x)",
     labels = c("a", "b")
   ), class = "stat_fit")
@@ -753,7 +790,7 @@ fit_hyperbolic <- function(x, y) {
   a <- arithmetic_mean(Y) - b * arithmetic_mean(x)
   structure(list(
     a = a, b = b,
-    equation = sprintf("y = 1 / (%.4f + %.4f * x)", a, b),
+    equation = paste0("y = 1 / (", full_digits(a), signed_full(b), " * x)"),
     description = "Hyperbolic fit y = 1 / (a + b*x)",
     labels = c("a", "b")
   ), class = "stat_fit")
@@ -807,7 +844,7 @@ fit_power <- function(x, y) {
   a <- exp(A)
   structure(list(
     a = a, b = b,
-    equation = sprintf("y = %.4f * x^%.4f", a, b),
+    equation = paste0("y = ", full_digits(a), " * x^", full_digits(b)),
     description = "Power fit y = a * x^b",
     labels = c("a", "b")
   ), class = "stat_fit")
@@ -926,13 +963,345 @@ polynomial_regression <- function(x, y, degree) {
   multiple_regression(preds, y)
 }
 
+# -----------------------------------------------------------------------------
+# join_signed_terms(values, labels, sep)        [you never call this yourself]
+# -----------------------------------------------------------------------------
+# WHAT IT DOES : Small helper used when printing a fit_model() result: it writes
+#                "3.6591 a + 0.5309 b" with the right + and - signs.
+# -----------------------------------------------------------------------------
+join_signed_terms <- function(values, labels, sep = " ") {
+  out <- ""
+  for (i in seq_along(values)) {
+    magnitude <- full_digits(abs(values[i]))
+    term <- if (labels[i] == "") magnitude else paste0(magnitude, sep, labels[i])
+    if (i == 1) {
+      out <- paste0(if (values[i] < 0) "-" else "", term)
+    } else {
+      out <- paste0(out, if (values[i] < 0) " - " else " + ", term)
+    }
+  }
+  out
+}
+
+# -----------------------------------------------------------------------------
+# fit_model(model, data = NULL, n = NULL, plot = TRUE)   <- THE SIMPLEST ONE TO USE
+# -----------------------------------------------------------------------------
+# WHAT IT DOES : Fits ANY model that is linear in its unknown coefficients,
+#                and you write the model AS TEXT, exactly as the exam gives
+#                it. It does the whole exercise: builds and shows the normal
+#                equations, solves them, and gives the coefficients, the
+#                fitted values, the errors, SSE, MSE and R^2. The model is
+#                written the way you read it in the statement, with your own
+#                letters.
+# HOW TO WRITE THE MODEL : put the model between quotes, with ONE "=" and an
+#                explicit * between a coefficient and what it multiplies:
+#     "y = a*x + b"                  straight line
+#     "z = a + b*x + c*y"            plane (multiple regression)
+#     "y = a*x^2 + b*x + c"          parabola
+#     "y = a*sin(x) + b*cos(x)"      no constant term: just don't write one
+#     "y = a + b*log(x)"             any function of x: sin, cos, log, exp...
+#   * The unknown COEFFICIENTS are every letter in the model that is NOT one
+#     of your data variables (a, b, c, ... normally). The DATA variables are
+#     the ones you already created with the same length as the response
+#     (x, y, z, ...). They are told apart automatically.
+#   * Exponential, hyperbolic and power models with ONE variable are
+#     recognised and fitted automatically by linearisation (same method as
+#     fit_exponential(), fit_hyperbolic(), fit_power()): "y = a*exp(b*x)",
+#     "y = a*b^x", "y = 1/(a + b*x)", "y = a*x^b". Any other model that is not
+#     linear in its coefficients is refused with an explanation.
+#   * The plot (data + fitted curve, or observed vs fitted if there are
+#     several variables) is drawn automatically; plot = FALSE skips it.
+# FORMULA (for reference — the normal equations, as in the slides):
+#   M = one column per coefficient (what multiplies it, evaluated at the data)
+#   (M' M) * coefficients = M' y       (with frequencies n: (M' W M) ... M' W y)
+# PARAMETERS   :
+#   model : the model as text, e.g. "y = a*x^2 + b*x + c" (see above). The
+#           variable BEFORE the "=" is the one being predicted.
+#   data  : optional data.frame or list with the variables (e.g. `pares`).
+#           Leave it out to use the variables you already created.
+#   plot  : FALSE to skip the plot.
+#   n     : optional vector with how many times each observation repeats
+#           (its absolute frequency), exactly as in the rest of this file.
+# RETURNS      : An object that prints the normal equations (with YOUR letters
+#                a, b, c...), the solution, the fitted equation with the
+#                numbers filled in, and SSE / MSE / R^2. You can also use:
+#                  $coefficients — named vector (a, b, c, ... in the order
+#                                  they appear in the model).
+#                  $fitted, $residuals, $sse, $mse, $r_squared (the slides'
+#                  definition: 1 - MSE / variance of the response),
+#                  $normal_lhs, $normal_rhs — the two sides of the normal
+#                  equations.
+# EXAMPLE      :
+#   x <- c(0,1,0,-1,0,1,1,2); y <- c(0,1,1,1,3,2,2,0); z <- c(2,3,4,5,7,4,5,0)
+#   fit_model("y = a*sin(x) + b*cos(x)")   # a = 0.6900588..., b = 1.5838855...
+#   fit_model("y = a*x^2 + b*x + c")       # a = -0.5, b = 0.3333..., c = 1.5833...
+#   fit_model("z = a + b*x + c*y")         # a = 2.2045..., b = -1.0568..., c = 1.6591...
+# -----------------------------------------------------------------------------
+fit_model <- function(model, data = NULL, n = NULL, plot = TRUE) {
+  caller <- parent.frame()
+  env <- if (is.null(data)) caller else list2env(as.list(data), parent = caller)
+  sides <- strsplit(model, "=", fixed = TRUE)[[1]]
+  if (length(sides) != 2) {
+    stop('Write the model as text with exactly one "=", e.g. "y = a*x + b".')
+  }
+  response_name <- trimws(sides[1])
+  rhs <- parse(text = sides[2])[[1]]
+  response <- get0(response_name, envir = env, mode = "numeric")
+  if (is.null(response)) {
+    stop("I can't find the variable `", response_name,
+         "` (the one before the \"=\") in your workspace or in `data`.")
+  }
+  N <- length(response)
+  
+  # data variables = symbols that exist as numeric vectors of the same length
+  # as the response; every other symbol is an unknown coefficient
+  symbols <- setdiff(all.vars(rhs), "pi")
+  is_data <- vapply(symbols, function(s) {
+    v <- get0(s, envir = env, mode = "numeric")
+    !is.null(v) && length(v) == N
+  }, logical(1))
+  params    <- symbols[!is_data]
+  data_vars <- symbols[is_data]
+  if (length(params) == 0) {
+    stop("No unknown coefficients found. Use letters that are not data ",
+         "variables for them, e.g. a, b, c.")
+  }
+  np <- length(params)
+  
+  # value of the right-hand side for given coefficient values
+  value_of <- function(values) {
+    e <- new.env(parent = env)
+    for (j in 1:np) assign(params[j], values[j], envir = e)
+    rep_len(as.numeric(eval(rhs, e)), N)
+  }
+  # exponential / hyperbolic / power models: recognised and fitted by
+  # linearisation (like fit_exponential(), fit_hyperbolic(), fit_power())
+  if (np == 2 && length(data_vars) == 1) {
+    xv <- get(data_vars, envir = env)
+    form <- recognize_nonlinear_form(value_of, xv)
+    if (!is.null(form)) {
+      fit <- fit_linearised_form(form, model, response_name, rhs, params,
+                                 data_vars, env, xv, response, n)
+      if (plot) plot_model_fit(fit)
+      return(fit)
+    }
+  }
+  offset <- value_of(rep(0, np))                # part with no coefficient
+  M <- matrix(0, N, np)                         # one column per coefficient
+  for (j in 1:np) {
+    unit <- rep(0, np); unit[j] <- 1
+    M[, j] <- value_of(unit) - offset
+  }
+  if (any(!is.finite(M)) || any(!is.finite(offset))) {
+    stop("The model gives NA/Inf. Either it is not linear in the coefficients ",
+         "(for example y = 1/(a + b*x): use fit_hyperbolic(); y = a*x^b: use ",
+         "fit_power()), or a term fails for your data (for example log(0)).")
+  }
+  test <- 1.3 * (-1)^(1:np) * (1 + (1:np) / 7)  # is it really linear?
+  if (!isTRUE(all.equal(value_of(test), as.vector(offset + M %*% test),
+                        tolerance = 1e-8))) {
+    stop("This model is not linear in the coefficients (",
+         paste(params, collapse = ", "), "), so the normal equations can't ",
+         "be used directly (only a*e^(b*x), a*b^x, 1/(a+b*x) and a*x^b are ",
+         "recognised automatically).")
+  }
+  
+  w <- if (is.null(n)) rep(1, N) else n
+  normal_lhs <- t(M) %*% (w * M)
+  normal_rhs <- as.vector(t(M) %*% (w * (response - offset)))
+  dimnames(normal_lhs) <- list(params, params)
+  solution <- tryCatch(solve(normal_lhs, normal_rhs), error = function(e) {
+    stop("The normal equations have no single solution: two of your terms ",
+         "are repeated or proportional (for example a*x + b*x).")
+  })
+  coefs <- setNames(as.vector(solution), params)
+  fitted_values <- as.vector(offset + M %*% coefs)
+  fit <- structure(list(
+    model         = model,
+    response_name = response_name,
+    response      = response,
+    weights       = n,
+    note          = NULL,
+    rhs           = rhs,
+    params        = params,
+    data_vars     = data_vars,
+    env           = env,
+    normal_lhs    = normal_lhs,
+    normal_rhs    = normal_rhs,
+    coefficients  = coefs,
+    fitted        = fitted_values,
+    residuals     = response - fitted_values,
+    sse           = sse_fit(response, fitted_values, n),
+    mse           = mse_fit(response, fitted_values, n),
+    rmse          = sqrt(mse_fit(response, fitted_values, n)),
+    r_squared     = r_squared_fit(response, fitted_values, n)
+  ), class = "model_fit")
+  if (plot) plot_model_fit(fit)
+  fit
+}
+
+# -----------------------------------------------------------------------------
+# predict_model(fit, new_data)
+# -----------------------------------------------------------------------------
+# WHAT IT DOES : Predicts the response for NEW values, using a model fitted
+#                with fit_model().
+# PARAMETERS   :
+#   fit      : the result of fit_model().
+#   new_data : a data.frame (or list) with the data variables of the model,
+#              e.g. data.frame(x = c(3, 4)).
+# RETURNS      : Vector with the predicted response, one per new value.
+# EXAMPLE      :
+#   x <- c(0,1,0,-1,0,1,1,2); y <- c(0,1,1,1,3,2,2,0)
+#   model <- fit_model("y = a*x^2 + b*x + c")
+#   predict_model(model, data.frame(x = c(3, 4)))
+# -----------------------------------------------------------------------------
+predict_model <- function(fit, new_data) {
+  missing_vars <- setdiff(fit$data_vars, names(new_data))
+  if (length(missing_vars) > 0) {
+    stop("`new_data` needs the variable(s): ", paste(missing_vars, collapse = ", "))
+  }
+  e <- list2env(as.list(new_data), parent = fit$env)
+  for (j in seq_along(fit$params)) assign(fit$params[j], fit$coefficients[[j]], envir = e)
+  as.numeric(eval(fit$rhs, e))
+}
+
+# -----------------------------------------------------------------------------
+# print.model_fit(x, ...)                  [you never call this yourself]
+# -----------------------------------------------------------------------------
+# WHAT IT DOES : Teaches R how to display the result of fit_model(): the
+#                normal equations (with your own letters), their solution,
+#                the fitted equation with the numbers filled in, and the
+#                goodness of fit. It runs AUTOMATICALLY when you print a fit.
+# -----------------------------------------------------------------------------
+print.model_fit <- function(x, ...) {
+  report_title(paste0("LEAST-SQUARES FIT:  ", x$model))
+  if (!is.null(x$note)) cat("  ", x$note, "\n", sep = "")
+  if (!is.null(x$normal_lhs)) {
+    report_section("Normal equations (they give the coefficients)")
+    for (i in seq_along(x$params)) {
+      cat("  ", full_digits(x$normal_rhs[i]), " = ",
+          join_signed_terms(x$normal_lhs[i, ], x$params), "\n", sep = "")
+    }
+  }
+  report_section("Coefficients")
+  for (i in seq_along(x$params)) {
+    cat(sprintf("  %-4s= %s\n", x$params[i], full_digits(x$coefficients[i])))
+  }
+  filled <- do.call(substitute, list(x$rhs, as.list(x$coefficients)))
+  filled <- paste(deparse(filled, width.cutoff = 500), collapse = "")
+  filled <- gsub("+ -", "- ", filled, fixed = TRUE)
+  report_section("Fitted model")
+  cat("  ", x$response_name, " = ", filled, "\n", sep = "")
+  report_section("Goodness of fit")
+  report_line("SSE (sum of squared errors)", x$sse)
+  report_line("MSE (mean squared error = SSE / N)", x$mse)
+  report_line("RMSE (typical error, in the units of the response)", x$rmse)
+  report_line(paste0("R^2 (1 - MSE / variance of ", x$response_name, ")"), x$r_squared)
+  cat("  (R^2 close to 1 = the model explains almost all the variation)\n")
+  invisible(x)
+}
+
+# -----------------------------------------------------------------------------
+# INTERNAL: recognize_nonlinear_form / fit_linearised_form / plot_model_fit
+# (called by fit_model(); you do not call them yourself)
+#   recognize_nonlinear_form : checks numerically whether the typed model is
+#       a*exp(b*x), a*b^x, 1/(a + b*x) or a*x^b (with any letters).
+#   fit_linearised_form      : fits it as a straight line after transforming
+#       (ln y, 1/y, ln x), with the SAME formulas as fit_exponential(), etc.,
+#       but taking frequencies into account. SSE/MSE/R^2 are computed on the
+#       ORIGINAL y scale.
+#   plot_model_fit           : draws data + fitted curve (one variable) or
+#       observed vs fitted values (several variables).
+# -----------------------------------------------------------------------------
+recognize_nonlinear_form <- function(value_of, xv) {
+  forms <- list(
+    exponential      = function(p, x) p[1] * exp(p[2] * x),
+    exponential_base = function(p, x) p[1] * p[2]^x,
+    hyperbolic       = function(p, x) 1 / (p[1] + p[2] * x),
+    power            = function(p, x) p[1] * x^p[2])
+  tests <- list(c(1.3, 0.7), c(0.6, 1.1), c(2.1, 0.4))
+  for (nm in names(forms)) for (swap in c(FALSE, TRUE)) {
+    ok <- all(vapply(tests, function(p) {
+      got  <- suppressWarnings(tryCatch(value_of(p), error = function(e) NA_real_))
+      want <- suppressWarnings(forms[[nm]](if (swap) rev(p) else p, xv))
+      all(is.finite(got)) && all(is.finite(want)) &&
+        isTRUE(all.equal(as.numeric(got), as.numeric(want), tolerance = 1e-9))
+    }, logical(1)))
+    if (ok) return(list(form = nm, swap = swap))
+  }
+  NULL
+}
+
+fit_linearised_form <- function(form, model, response_name, rhs, params,
+                                data_vars, env, xv, response, n) {
+  f <- form$form
+  if (f != "hyperbolic" && any(response <= 0))
+    stop("This model needs every `", response_name, "` value to be positive (it uses a logarithm).")
+  if (f == "hyperbolic" && any(response == 0))
+    stop("This model uses 1/", response_name, ", so no `", response_name, "` value can be 0.")
+  if (f == "power" && any(xv <= 0))
+    stop("This model needs every `", data_vars, "` value to be positive (it uses a logarithm).")
+  idx <- if (form$swap) c(2, 1) else c(1, 2)       # which coefficient is the form's 1st / 2nd
+  P1 <- params[idx[1]]; P2 <- params[idx[2]]
+  Xt <- if (f == "power") log(xv) else xv
+  Yt <- if (f == "hyperbolic") 1 / response else log(response)
+  B <- covariance(Xt, Yt, n) / variance(Xt, n)
+  A <- arithmetic_mean(Yt, n) - B * arithmetic_mean(Xt, n)
+  p <- switch(f, exponential = c(exp(A), B), exponential_base = c(exp(A), exp(B)),
+              hyperbolic = c(A, B), power = c(exp(A), B))
+  note <- switch(f,
+                 exponential      = paste0("Fitted as a straight line:  ln(", response_name, ") = ln(", P1, ") + ", P2, "*", data_vars),
+                 exponential_base = paste0("Fitted as a straight line:  ln(", response_name, ") = ln(", P1, ") + ln(", P2, ")*", data_vars),
+                 hyperbolic       = paste0("Fitted as a straight line:  1/", response_name, " = ", P1, " + ", P2, "*", data_vars),
+                 power            = paste0("Fitted as a straight line:  ln(", response_name, ") = ln(", P1, ") + ", P2, "*ln(", data_vars, ")"))
+  coefs <- numeric(2); coefs[idx] <- p; names(coefs) <- params
+  e <- list2env(as.list(setNames(list(xv), data_vars)), parent = env)
+  for (j in 1:2) assign(params[j], coefs[[j]], envir = e)
+  fitted_values <- as.numeric(eval(rhs, e))
+  structure(list(
+    model = model, response_name = response_name, response = response, weights = n,
+    note = paste0(note, "\n  (SSE, MSE and R^2 below are measured on the ORIGINAL ",
+                  response_name, " values, not on the transformed ones)"),
+    rhs = rhs, params = params, data_vars = data_vars, env = env,
+    normal_lhs = NULL, normal_rhs = NULL, coefficients = coefs,
+    fitted = fitted_values, residuals = response - fitted_values,
+    sse = sse_fit(response, fitted_values, n), mse = mse_fit(response, fitted_values, n),
+    rmse = sqrt(mse_fit(response, fitted_values, n)),
+    r_squared = r_squared_fit(response, fitted_values, n)
+  ), class = "model_fit")
+}
+
+plot_model_fit <- function(fit) {
+  size <- if (is.null(fit$weights)) rep(1, length(fit$response)) else fit$weights
+  if (length(fit$data_vars) == 1) {
+    v <- fit$data_vars
+    xv <- get(v, envir = fit$env)
+    grid <- seq(min(xv), max(xv), length.out = 300)
+    curve_y <- predict_model(fit, setNames(list(grid), v))
+    plot(xv, fit$response, pch = 19, col = "steelblue", cex = sqrt(size),
+         xlab = v, ylab = fit$response_name,
+         main = paste0("Fit: ", fit$model),
+         ylim = range(c(fit$response, curve_y), finite = TRUE))
+    lines(grid, curve_y, col = "firebrick", lwd = 2)
+    legend("topleft", legend = c("data (size = frequency)", "fitted model"),
+           col = c("steelblue", "firebrick"), pch = c(19, NA), lty = c(NA, 1), bty = "n")
+  } else if (length(fit$data_vars) > 1) {
+    plot(fit$fitted, fit$response, pch = 19, col = "steelblue", cex = sqrt(size),
+         xlab = paste0("fitted ", fit$response_name),
+         ylab = paste0("observed ", fit$response_name),
+         main = paste0("Observed vs fitted: ", fit$model))
+    abline(0, 1, col = "firebrick", lwd = 2)
+  }
+  invisible(NULL)
+}
+
 
 # =============================================================================
 # 7. GRAPHS
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# plot_regression_lines(x, y, n = NULL, show_both = TRUE, main = "Scatter plot and regression line(s)")
+# plot_regression_lines(x, y, n = NULL, show_both = TRUE, main = ..., x_name = "X", y_name = "Y")
 # -----------------------------------------------------------------------------
 # WHAT IT DOES : Draws the scatter plot of the data (one point per pair, its
 #                size proportional to how often that pair repeats) together
@@ -950,6 +1319,7 @@ polynomial_regression <- function(x, y, degree) {
 #   show_both : TRUE (default) draws both regression lines (R_Y/X and
 #               R_X/Y). FALSE draws only R_Y/X.
 #   main      : title of the plot.
+#   x_name, y_name : names shown on the axes and in the legend.
 # RETURNS      : Invisibly, a list with $R_Y_X and $R_X_Y — the two fitted
 #                models (each with $a and $b), in case you want to inspect
 #                or reuse them. Mainly used for the plot it draws.
@@ -959,15 +1329,16 @@ polynomial_regression <- function(x, y, degree) {
 #                          main = "Height vs Weight")
 # -----------------------------------------------------------------------------
 plot_regression_lines <- function(x, y, n = NULL, show_both = TRUE,
-                                  main = "Scatter plot and regression line(s)") {
+                                  main = "Scatter plot and regression line(s)",
+                                  x_name = "X", y_name = "Y") {
   n_size <- if (is.null(n)) rep(1, length(x)) else n
   model_yx <- regression_y_on_x(x, y, n)
   
   plot(x, y, cex = sqrt(n_size), pch = 19, col = "steelblue",
-       xlab = "X", ylab = "Y", main = main)
+       xlab = x_name, ylab = y_name, main = main)
   abline(a = model_yx$a, b = model_yx$b, col = "firebrick", lwd = 2)
   
-  legend_labels <- c("data (size = frequency)", "R_Y/X")
+  legend_labels <- c("data (size = frequency)", paste0(y_name, " on ", x_name))
   legend_colors <- c("steelblue", "firebrick")
   legend_pch    <- c(19, NA)
   legend_lty    <- c(NA, 1)
@@ -978,7 +1349,7 @@ plot_regression_lines <- function(x, y, n = NULL, show_both = TRUE,
     # R_X/Y is x = a' + b'*y; rewritten as y = (x - a')/b' to draw it in the X-Y plane
     abline(a = -model_xy$a / model_xy$b, b = 1 / model_xy$b,
            col = "darkgreen", lwd = 2, lty = 2)
-    legend_labels <- c(legend_labels, "R_X/Y")
+    legend_labels <- c(legend_labels, paste0(x_name, " on ", y_name))
     legend_colors <- c(legend_colors, "darkgreen")
     legend_pch    <- c(legend_pch, NA)
     legend_lty    <- c(legend_lty, 2)
@@ -991,4 +1362,416 @@ plot_regression_lines <- function(x, y, n = NULL, show_both = TRUE,
          pch = legend_pch, lty = legend_lty, bty = "n")
   
   invisible(list(R_Y_X = model_yx, R_X_Y = model_xy))
+}
+
+
+# =============================================================================
+# 0. MAIN FUNCTIONS (ONE CALL = FULL ANSWER)
+# =============================================================================
+# These are the functions to use in the exam. Each one prints a complete
+# report in plain English, uses the real names of your variables, shows every
+# decimal and draws the plot.
+#
+#   Two lists of numbers x, y (raw or with frequencies) -> linear_regression()
+#   A two-way table (X by Y), values or intervals       -> analyze_table()
+#   Two regression lines given as equations            -> analyze_regression_lines()
+#   Any formula written as text, e.g. "y = a*x^2+b*x+c" -> fit_model()
+# =============================================================================
+
+# INTERNAL: plain-English reading of a correlation coefficient
+describe_correlation <- function(r) {
+  a <- abs(r)
+  strength <- if (a >= 1 - 1e-12) "perfect" else if (a >= 0.9) "very strong"
+  else if (a >= 0.7) "strong" else if (a >= 0.4) "moderate"
+  else if (a >= 0.2) "weak" else "very weak or none"
+  direction <- if (a < 1e-12) "" else if (r > 0) "positive (when one grows, the other tends to grow)"
+  else "negative (when one grows, the other tends to decrease)"
+  paste0(strength, if (nzchar(direction)) paste0(", ", direction) else " (no linear relationship)")
+}
+
+# INTERNAL: prints one regression line with its coefficients and errors
+report_regression_line <- function(title, resp, pred, a, b, actual, fitted, n,
+                                   course_name, slope_formula, direction) {
+  report_section(title)
+  cat("  Course notation: ", course_name, "  (", direction, ")\n", sep = "")
+  cat("  Use it when you KNOW ", pred, " and want to ESTIMATE ", resp, ".\n", sep = "")
+  cat("  Equation:  ", resp, " = a + b * ", pred, "\n", sep = "")
+  cat("  Filled in: ", resp, " = ", full_digits(a), signed_full(b), " * ", pred, "\n", sep = "")
+  report_line(paste0("a  (intercept: value of ", resp, " when ", pred, " = 0)"), a)
+  report_line(paste0("b  (slope: change in ", resp, " for each +1 in ", pred, ")"), b)
+  cat("     (", slope_formula, ")\n", sep = "")
+  sse <- sse_fit(actual, fitted, n); mse <- mse_fit(actual, fitted, n)
+  cat("  Errors of this line (real ", resp, " minus predicted ", resp, "):\n", sep = "")
+  report_line("SSE (sum of squared errors)", sse)
+  report_line("MSE (mean squared error = SSE / N)", mse)
+  report_line(paste0("RMSE (typical error, in the units of ", resp, ")"), sqrt(mse))
+}
+
+# -----------------------------------------------------------------------------
+# linear_regression(x, y, n = NULL, x_name = NULL, y_name = NULL,
+#                   predict_y_at = NULL, predict_x_at = NULL, plot = TRUE)
+# -----------------------------------------------------------------------------
+# WHAT IT DOES : Everything about the straight-line relationship between two
+#                variables, in ONE call: both regression lines (y on x and
+#                x on y) with their a and b, the covariance, the correlation
+#                coefficient r with a plain-English reading, R^2, the errors
+#                (SSE, MSE, RMSE) of each line, optional predictions, and the
+#                scatter plot with both lines. The names of your variables are
+#                used everywhere (e.g. "weight = a + b * height").
+# PARAMETERS   :
+#   x, y         : the two variables, same length. One value per observation,
+#                  or the different pairs together with their frequencies `n`.
+#   n            : (optional) how many times each pair appears.
+#   x_name,y_name: (optional) names to show; by default the names of the
+#                  objects you passed (for pares$x it shows "x").
+#   predict_y_at : (optional) value(s) of x at which to predict y.
+#   predict_x_at : (optional) value(s) of y at which to predict x.
+#   plot         : FALSE to skip the plot.
+# RETURNS      : Invisibly, a list with y_on_x, x_on_y (each with $a, $b),
+#                covariance, r, r_squared, N.
+# EXAMPLE      :
+#   height <- c(150,160,170,180); weight <- c(50,58,69,80)
+#   linear_regression(height, weight, predict_y_at = 175)
+#   # table data:  p <- table_to_pairs(tab, x_marks, y_marks)
+#   #              linear_regression(p$x, p$y, p$n, x_name="height", y_name="weight")
+# -----------------------------------------------------------------------------
+linear_regression <- function(x, y, n = NULL, x_name = NULL, y_name = NULL,
+                              predict_y_at = NULL, predict_x_at = NULL, plot = TRUE) {
+  xn <- if (is.null(x_name)) variable_label(deparse(substitute(x)), "X") else x_name
+  yn <- if (is.null(y_name)) variable_label(deparse(substitute(y)), "Y") else y_name
+  if (length(x) != length(y)) stop("`x` and `y` must have the same length.")
+  if (!is.null(n) && length(n) != length(x)) stop("`n` must have the same length as `x` and `y`.")
+  w <- freq_or_ones(x, n)
+  N <- sum(w)
+  vx <- variance(x, n); vy <- variance(y, n)
+  if (vx == 0 || vy == 0) stop("One of the variables is constant: there is no regression line.")
+  cv <- covariance(x, y, n)
+  r <- cv / sqrt(vx * vy)
+  yx <- regression_y_on_x(x, y, n); xy <- regression_x_on_y(x, y, n)
+  
+  report_title(paste0("LINEAR REGRESSION:  ", yn, " and ", xn))
+  report_line("Number of observations (N)", N)
+  cat("\n  There are TWO different regression lines, because each one minimizes the errors\n",
+      "  in a different direction (line 1: errors in ", yn, "; line 2: errors in ", xn, ").\n",
+      "  Solving line 1 for ", xn, " does NOT give line 2. Both cross at the point\n",
+      "  (mean of ", xn, ", mean of ", yn, ") = (", full_digits(arithmetic_mean(x, n)), ", ",
+      full_digits(arithmetic_mean(y, n)), ").\n", sep = "")
+  report_regression_line(paste0("Regression line 1: predicts ", yn, " from ", xn, "  (", yn, " on ", xn, ")"),
+                         yn, xn, yx$a, yx$b, y, yx$a + yx$b * x, n,
+                         "R_Y/X, the regression of Y on X",
+                         paste0("b = Cov(", xn, ",", yn, ") / Var(", xn, "); a = mean ", yn, " - b * mean ", xn),
+                         paste0("Y = ", yn, ", X = ", xn))
+  report_regression_line(paste0("Regression line 2: predicts ", xn, " from ", yn, "  (", xn, " on ", yn, ")"),
+                         xn, yn, xy$a, xy$b, x, xy$a + xy$b * y, n,
+                         "R_X/Y, the regression of X on Y",
+                         paste0("b' = Cov(", xn, ",", yn, ") / Var(", yn, "); a' = mean ", xn, " - b' * mean ", yn),
+                         paste0("X = ", xn, ", Y = ", yn))
+  report_section("Strength of the linear relationship")
+  report_line(paste0("Covariance of ", xn, " and ", yn), cv)
+  report_line("Correlation coefficient r (between -1 and 1)", r)
+  cat(sprintf("  %-62s %s\n", "", paste("->", describe_correlation(r))))
+  cat("     (r = Cov / (sd of ", xn, " * sd of ", yn, "); its sign is the sign of both slopes)\n", sep = "")
+  report_line("R^2 = r^2 (share of the variation explained by the line)", r^2)
+  report_line("Check: b (line 1) * b' (line 2) = r^2", yx$b * xy$b)
+  cat("  (R^2 is the same for both lines. The errors (SSE, MSE, RMSE) of the two lines\n",
+      "   are NOT comparable: line 1 is measured in ", yn, " units, line 2 in ", xn, " units.)\n", sep = "")
+  if (!is.null(predict_y_at)) {
+    report_section(paste0("Predictions of ", yn))
+    for (v in predict_y_at) report_line(paste0("When ", xn, " = ", full_digits(v), ", predicted ", yn),
+                                        yx$a + yx$b * v)
+  }
+  if (!is.null(predict_x_at)) {
+    report_section(paste0("Predictions of ", xn))
+    for (v in predict_x_at) report_line(paste0("When ", yn, " = ", full_digits(v), ", predicted ", xn),
+                                        xy$a + xy$b * v)
+  }
+  if (plot) plot_regression_lines(x, y, n, TRUE,
+                                  main = paste0(yn, " vs ", xn, " with regression lines"),
+                                  x_name = xn, y_name = yn)
+  invisible(list(y_on_x = yx, x_on_y = xy, covariance = cv, r = r,
+                 r_squared = r^2, N = N))
+}
+
+# -----------------------------------------------------------------------------
+# analyze_table(table, x_values = NULL, y_values = NULL,
+#               x_limits = NULL, y_limits = NULL, rows_are = "X",
+#               x_name = "X", y_name = "Y", given_x = NULL, given_y = NULL,
+#               plot = TRUE)
+# -----------------------------------------------------------------------------
+# WHAT IT DOES : Complete analysis of a two-way frequency table in ONE call:
+#                joint absolute and relative tables with their totals,
+#                marginal distributions of X and of Y (mean, variance, sd),
+#                independence check, optional conditional distributions,
+#                covariance, correlation, both regression lines, and the plot.
+# PARAMETERS   :
+#   table    : matrix of absolute frequencies.
+#   x_values, y_values : the value of X for each row of the table and the
+#              value of Y for each column (class marks if grouped).
+#              If omitted they are taken from the row/column names.
+#   x_limits, y_limits : instead of values, give the interval BOUNDARIES
+#              (one more than rows/columns), e.g. c(150,160,170,180); the
+#              class marks are computed for you.
+#   rows_are : "X" (default) if the rows of your table are X and the columns Y.
+#              "Y" if the rows are Y (typical "Y/X" tables): it is transposed.
+#   x_name, y_name : names to show.
+#   given_x  : (optional) value(s) of X: shows the distribution of Y given X.
+#   given_y  : (optional) value(s) of Y: shows the distribution of X given Y.
+# RETURNS      : Invisibly, a list with the (x, y, n) pairs, the results of
+#                the regression (see linear_regression) and `independent`.
+# EXAMPLE      :
+#   tab <- matrix(c(2,4,1, 0,4,6, 0,3,1), nrow = 3, byrow = TRUE)
+#   analyze_table(tab, x_limits = c(150,160,170,180), y_limits = c(50,60,70,80),
+#                 x_name = "height", y_name = "weight", given_x = 165)
+# -----------------------------------------------------------------------------
+analyze_table <- function(table, x_values = NULL, y_values = NULL,
+                          x_limits = NULL, y_limits = NULL, rows_are = "X",
+                          x_name = "X", y_name = "Y", given_x = NULL,
+                          given_y = NULL, plot = TRUE) {
+  tab <- as.matrix(table)
+  if (toupper(rows_are) == "Y") {
+    tab <- t(tab)
+  } else if (toupper(rows_are) != "X") stop('`rows_are` must be "X" or "Y".')
+  # values / marks of each variable
+  get_marks <- function(values, limits, k, names_vec, what) {
+    if (!is.null(limits)) {
+      if (length(limits) != k + 1)
+        stop("Your table has ", nrow(tab), " rows and ", ncol(tab), " columns (rows are ", toupper(rows_are),
+             "). So `", what, "_limits` must have ", k + 1, " boundaries (one more than the number of ",
+             if (what == "x") "rows" else "columns", ") but you gave ", length(limits),
+             ". Check that `tab` is the table you mean and, if its rows are Y, use rows_are = \"Y\".")
+      return(list(v = class_mark(limits[-(k + 1)], limits[-1]),
+                  lab = interval_labels(limits[-(k + 1)], limits[-1], TRUE)))
+    }
+    if (is.null(values)) {
+      values <- suppressWarnings(as.numeric(names_vec))
+      if (is.null(names_vec) || anyNA(values))
+        stop("Give `", what, "_values` (one per ", if (what == "x") "row" else "column",
+             ") or `", what, "_limits`.")
+    }
+    if (length(values) != k) stop("`", what, "_values` must have ", k, " values.")
+    list(v = values, lab = full_digits(values))
+  }
+  # if the user gave values/limits for X and Y in the ORIGINAL orientation, they
+  # already refer to X and Y, so nothing else to swap
+  mx <- get_marks(x_values, x_limits, nrow(tab), rownames(tab), "x")
+  my <- get_marks(y_values, y_limits, ncol(tab), colnames(tab), "y")
+  xv <- mx$v; yv <- my$v
+  N <- sum(tab)
+  rel <- tab / N
+  ni <- rowSums(tab); nj <- colSums(tab)
+  
+  report_title(paste0("TWO-WAY TABLE ANALYSIS:  ", x_name, " (rows) and ", y_name, " (columns)"))
+  show_tab <- function(m) {
+    full <- rbind(cbind(m, Total = rowSums(m)), Total = c(colSums(m), sum(m)))
+    dimnames(full) <- list(c(mx$lab, "Total"), c(my$lab, "Total"))
+    print(full)
+  }
+  report_section(paste0("Joint absolute frequencies (rows = ", x_name, ", columns = ", y_name, ")"))
+  show_tab(tab)
+  report_section("Joint relative frequencies (absolute / N)")
+  show_tab(rel)
+  
+  marg <- function(vals, freq, nm) {
+    report_section(paste0("Marginal distribution of ", nm))
+    report_line(paste0("Mean of ", nm), arithmetic_mean(vals, freq))
+    report_line(paste0("Variance of ", nm, " (divides by N)"), variance(vals, freq))
+    report_line(paste0("Standard deviation of ", nm), standard_deviation(vals, freq))
+    report_line(paste0("Sample variance of ", nm, " (divides by N - 1)"), sample_quasi_variance(vals, freq))
+  }
+  marg(xv, ni, x_name); marg(yv, nj, y_name)
+  
+  report_section("Independence")
+  expected <- outer(ni / N, nj / N)
+  gap <- max(abs(rel - expected))
+  indep <- gap <= 1e-8
+  report_line("Largest gap between f_ij and (f_i. * f_.j)", gap)
+  cat("  ->", if (indep) paste0(x_name, " and ", y_name, " are INDEPENDENT (f_ij = f_i. * f_.j in every cell)\n")
+      else paste0(x_name, " and ", y_name, " are NOT independent (the relative frequencies are not the product of the marginals)\n"))
+  
+  cond <- function(given, vals_given, lab_given, vals_other, lab_other, freq_fun, gname, oname) {
+    for (g in given) {
+      k <- which(abs(vals_given - g) < 1e-9)
+      if (length(k) == 0) {
+        k <- which(lab_given == as.character(g))
+        if (length(k) == 0) stop("The value ", g, " of ", gname, " is not in the table.")
+      }
+      f <- freq_fun(k[1])
+      report_section(paste0("Distribution of ", oname, " given ", gname, " = ", g))
+      df <- data.frame(value = lab_other, absolute = f, relative = f / sum(f))
+      names(df)[1] <- oname
+      print(df, row.names = FALSE)
+      report_line(paste0("Mean of ", oname, " given ", gname, " = ", g), arithmetic_mean(vals_other, f))
+      report_line(paste0("Variance of ", oname, " given ", gname, " = ", g), variance(vals_other, f))
+    }
+  }
+  if (!is.null(given_x)) cond(given_x, xv, mx$lab, yv, my$lab, function(k) tab[k, ], x_name, y_name)
+  if (!is.null(given_y)) cond(given_y, yv, my$lab, xv, mx$lab, function(k) tab[, k], y_name, x_name)
+  
+  pairs <- table_to_pairs(tab, xv, yv)
+  res <- linear_regression(pairs$x, pairs$y, pairs$n, x_name = x_name, y_name = y_name, plot = plot)
+  invisible(c(list(pairs = pairs, independent = indep, N = N), res))
+}
+
+# -----------------------------------------------------------------------------
+# analyze_regression_lines(line1, line2, vars = c("x", "y"),
+#      var_x = NULL, var_y = NULL, sd_x = NULL, sd_y = NULL, N = NULL,
+#      remove = NULL, add = NULL, predict_y_at = NULL, predict_x_at = NULL,
+#      line1_is = NULL)
+# -----------------------------------------------------------------------------
+# WHAT IT DOES : For exercises where you are GIVEN the two regression lines
+#                as equations. It finds which one is y-on-x and which is
+#                x-on-y, the point where they cross (the means), the
+#                correlation coefficient, and, if you give a variance or sd,
+#                the other variances and the covariance. With N and
+#                remove/add it recomputes everything after taking out or
+#                adding an observation.
+# PARAMETERS   :
+#   line1, line2 : the equations as text, e.g. "2*x - 3*y + 1 = 0" or
+#                  "y = 3 + 0.5*x" ("3x" without * also works).
+#   vars         : the two letters used in the equations: c(X name, Y name).
+#   var_x, var_y, sd_x, sd_y : (optional) a known variance / standard
+#                  deviation (divided by N). One is enough.
+#   N            : (optional) number of observations (needed for remove/add).
+#   remove, add  : (optional) c(x, y) of one observation to remove / add.
+#   predict_y_at, predict_x_at : (optional) predictions.
+#   line1_is     : "Y/X" or "X/Y" if you already know which line line1 is.
+# RETURNS      : Invisibly, a list with the results.
+# EXAMPLE      :
+#   analyze_regression_lines("y = 0.5 + 0.8*x", "x = 1 + 0.5*y")
+#   analyze_regression_lines("3*x + 2*y = 20", "x + 4*y = 15", sd_x = 2,
+#                            N = 10, remove = c(4, 4))
+# -----------------------------------------------------------------------------
+analyze_regression_lines <- function(line1, line2, vars = c("x", "y"),
+                                     var_x = NULL, var_y = NULL, sd_x = NULL, sd_y = NULL,
+                                     N = NULL, remove = NULL, add = NULL,
+                                     predict_y_at = NULL, predict_x_at = NULL,
+                                     line1_is = NULL) {
+  xn <- vars[1]; yn <- vars[2]
+  parse_line <- function(txt) {
+    sides <- strsplit(txt, "=", fixed = TRUE)[[1]]
+    if (length(sides) != 2) stop('Write each line with one "=", e.g. "3*x + 2*y = 20".')
+    fix <- function(s) gsub("([0-9.])\\s*([A-Za-z_])", "\\1*\\2", s)
+    f <- function(xx, yy) {
+      env <- setNames(list(xx, yy), vars)
+      eval(parse(text = fix(sides[1])), env) - eval(parse(text = fix(sides[2])), env)
+    }
+    c0 <- f(0, 0)
+    c(A = f(1, 0) - c0, B = f(0, 1) - c0, C = c0)     # A*x + B*y + C = 0
+  }
+  L1 <- parse_line(line1); L2 <- parse_line(line2)
+  tol <- 1e-12
+  # slope of y on x for a line, and of x on y
+  yx_ok <- function(L) abs(L["B"]) > tol
+  xy_ok <- function(L) abs(L["A"]) > tol
+  candidate <- function(Lyx, Lxy) {
+    if (!yx_ok(Lyx) || !xy_ok(Lxy)) return(NULL)
+    b  <- -Lyx["A"] / Lyx["B"]
+    bp <- -Lxy["B"] / Lxy["A"]
+    r2 <- b * bp
+    if (r2 >= -tol && r2 <= 1 + 1e-9) list(b = unname(b), bp = unname(bp), r2 = max(r2, 0)) else NULL
+  }
+  c1 <- candidate(L1, L2)   # line1 = y on x
+  c2 <- candidate(L2, L1)   # line2 = y on x
+  if (!is.null(line1_is)) {
+    if (toupper(line1_is) == "Y/X") c2 <- NULL else c1 <- NULL
+  }
+  if (is.null(c1) && is.null(c2))
+    stop("These two lines cannot be regression lines of the same data (the product of the two slopes b*b' must be between 0 and 1).")
+  if (!is.null(c1) && !is.null(c2) && abs(c1$r2 - 1) > 1e-9)
+    stop("Both assignments are possible; tell me which one is y on x with line1_is = \"Y/X\" or \"X/Y\".")
+  if (!is.null(c1)) { Lyx <- L1; Lxy <- L2; cc <- c1; yx_name <- "line 1"; xy_name <- "line 2" }
+  else { Lyx <- L2; Lxy <- L1; cc <- c2; yx_name <- "line 2"; xy_name <- "line 1" }
+  b <- cc$b; bp <- cc$bp
+  a  <- -unname(Lyx["C"]) / unname(Lyx["B"])         # y = a + b x
+  ap <- -unname(Lxy["C"]) / unname(Lxy["A"])         # x = a' + b' y
+  r <- sign(b) * sqrt(cc$r2)
+  # intersection = (mean x, mean y)
+  M <- rbind(c(Lyx["A"], Lyx["B"]), c(Lxy["A"], Lxy["B"]))
+  cen <- solve(M, -c(Lyx["C"], Lxy["C"]))
+  mx <- unname(cen[1]); my <- unname(cen[2])
+  
+  report_title("REGRESSION LINES ANALYSIS (given equations)")
+  report_section("Which line is which")
+  cat(sprintf("  %s is the regression of %s on %s:  %s = %s%s * %s\n", yx_name, yn, xn, yn,
+              full_digits(a), signed_full(b), xn))
+  cat(sprintf("  %s is the regression of %s on %s:  %s = %s%s * %s\n", xy_name, xn, yn, xn,
+              full_digits(ap), signed_full(bp), yn))
+  cat("  (rule: the two slopes satisfy b * b' = r^2 <= 1, which identifies each line)\n")
+  report_section("Results")
+  report_line(paste0("Slope of ", yn, " on ", xn, " (b)"), b)
+  report_line(paste0("Slope of ", xn, " on ", yn, " (b')"), bp)
+  report_line("R^2 = b * b'", cc$r2)
+  report_line("Correlation coefficient r (sign = sign of the slopes)", r)
+  if (cc$r2 > 0) cat(sprintf("  %-62s %s\n", "", paste("->", describe_correlation(r))))
+  report_line(paste0("Mean of ", xn, " (the two lines cross at the means)"), mx)
+  report_line(paste0("Mean of ", yn), my)
+  
+  # variances
+  vx <- vy <- cv <- NULL
+  if (!is.null(sd_x)) var_x <- sd_x^2
+  if (!is.null(sd_y)) var_y <- sd_y^2
+  if (!is.null(var_x)) { vx <- var_x; cv <- b * vx; vy <- if (abs(bp) > tol) cv / bp else NA }
+  else if (!is.null(var_y)) { vy <- var_y; cv <- bp * vy; vx <- if (abs(b) > tol) cv / b else NA }
+  if (!is.null(vx)) {
+    report_section("Variances and covariance (from the data you gave)")
+    report_line(paste0("Variance of ", xn), vx)
+    report_line(paste0("Variance of ", yn), vy)
+    report_line(paste0("Standard deviation of ", xn), sqrt(vx))
+    report_line(paste0("Standard deviation of ", yn), sqrt(vy))
+    report_line("Covariance (b * variance of x = b' * variance of y)", cv)
+  } else if (cc$r2 > 0) {
+    report_section("Ratio of spreads")
+    report_line(paste0("sd(", yn, ") / sd(", xn, ") = b / r"), b / r)
+    cat("  (give var_x, var_y, sd_x or sd_y to get the variances and covariance)\n")
+  }
+  
+  if (!is.null(predict_y_at)) {
+    report_section(paste0("Predictions of ", yn))
+    for (v in predict_y_at) report_line(paste0("When ", xn, " = ", full_digits(v), ", predicted ", yn), a + b * v)
+  }
+  if (!is.null(predict_x_at)) {
+    report_section(paste0("Predictions of ", xn))
+    for (v in predict_x_at) report_line(paste0("When ", yn, " = ", full_digits(v), ", predicted ", xn), ap + bp * v)
+  }
+  
+  out <- list(y_on_x = c(a = a, b = b), x_on_y = c(a = ap, b = bp), r = r,
+              r_squared = cc$r2, mean_x = mx, mean_y = my,
+              var_x = vx, var_y = vy, covariance = cv)
+  
+  # remove / add an observation
+  if (!is.null(remove) || !is.null(add)) {
+    if (is.null(N) || is.null(vx) || is.na(vx) || is.na(vy))
+      stop("To remove/add an observation I need N and a variance (var_x, var_y, sd_x or sd_y).")
+    Sx  <- N * mx;  Sy <- N * my
+    Sxx <- N * (vx + mx^2); Syy <- N * (vy + my^2); Sxy <- N * (cv + mx * my)
+    N2 <- N
+    if (!is.null(remove)) {
+      Sx <- Sx - remove[1]; Sy <- Sy - remove[2]; Sxx <- Sxx - remove[1]^2
+      Syy <- Syy - remove[2]^2; Sxy <- Sxy - remove[1] * remove[2]; N2 <- N2 - 1
+    }
+    if (!is.null(add)) {
+      Sx <- Sx + add[1]; Sy <- Sy + add[2]; Sxx <- Sxx + add[1]^2
+      Syy <- Syy + add[2]^2; Sxy <- Sxy + add[1] * add[2]; N2 <- N2 + 1
+    }
+    mx2 <- Sx / N2; my2 <- Sy / N2
+    vx2 <- Sxx / N2 - mx2^2; vy2 <- Syy / N2 - my2^2; cv2 <- Sxy / N2 - mx2 * my2
+    b2 <- cv2 / vx2; bp2 <- cv2 / vy2
+    report_section(paste0("After ", if (!is.null(remove)) paste0("removing (", paste(full_digits(remove), collapse = ", "), ")") else "",
+                          if (!is.null(remove) && !is.null(add)) " and " else "",
+                          if (!is.null(add)) paste0("adding (", paste(full_digits(add), collapse = ", "), ")") else ""))
+    report_line("New number of observations", N2)
+    report_line(paste0("New mean of ", xn), mx2)
+    report_line(paste0("New mean of ", yn), my2)
+    report_line(paste0("New variance of ", xn), vx2)
+    report_line(paste0("New variance of ", yn), vy2)
+    report_line("New covariance", cv2)
+    report_line("New correlation coefficient r", cv2 / sqrt(vx2 * vy2))
+    cat("  ", yn, " = ", full_digits(my2 - b2 * mx2), signed_full(b2), " * ", xn, "\n", sep = "")
+    cat("  ", xn, " = ", full_digits(mx2 - bp2 * my2), signed_full(bp2), " * ", yn, "\n", sep = "")
+    out$after <- list(N = N2, mean_x = mx2, mean_y = my2, var_x = vx2, var_y = vy2,
+                      covariance = cv2, r = cv2 / sqrt(vx2 * vy2),
+                      y_on_x = c(a = my2 - b2 * mx2, b = b2),
+                      x_on_y = c(a = mx2 - bp2 * my2, b = bp2))
+  }
+  invisible(out)
 }
