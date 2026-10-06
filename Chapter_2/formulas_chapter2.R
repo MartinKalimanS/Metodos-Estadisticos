@@ -46,7 +46,7 @@
 #   Two lists of numbers x, y                  -> linear_regression(x, y, n)
 #   A two-way table (values or intervals)      -> analyze_table(tab, x_limits=, y_limits=)
 #   Two regression lines given as equations    -> analyze_regression_lines("..", "..")
-#   MSE of an equation that is already given  -> mse_of_model("y = 3 + 0.5*x")
+#   Only the MSE of a model (letters or numbers) -> mse_of_model("y = a*e^(b*x)")
 #   Any formula typed as text ("y = a*x^2+b*x+c", "y = a*exp(b*x)",
 #   "z = a + b*x + c*y")                       -> fit_model("...")
 #  Each prints an English report with all decimals and draws the plot.
@@ -702,57 +702,76 @@ variance_explained_fit <- function(actual, predicted, n = NULL) {
 # -----------------------------------------------------------------------------
 # mse_of_model(model, data = NULL, n = NULL)
 # -----------------------------------------------------------------------------
-# WHAT IT DOES : Calculates the MSE (mean squared error) of a model whose
-#                numbers ARE ALREADY KNOWN, written as text like in the
-#                statement. No fitting is done: it just plugs your data into
-#                the formula and measures the error. It also gives SSE, RMSE
-#                and R^2. Use it when the exercise GIVES you the equation
-#                ("find the MSE of y = 3 + 0.5*x") or when you want to check
-#                a model you fitted by hand.
-#                (If the model has unknown letters a, b, c to find, use
-#                fit_model() instead: it fits AND gives the MSE.)
+# WHAT IT DOES : Gives the MSE (mean squared error) of a model in ONE call,
+#                and it works in the two situations of the exam:
+#                (1) The statement does NOT give the numbers: you write the
+#                    model with letters, e.g. "y = a*e^(b*x)", and it first
+#                    finds a and b by least squares and then gives the MSE
+#                    (you never need to know a and b).
+#                (2) The statement GIVES the equation with numbers, e.g.
+#                    "y = 5.88*e^(-0.13*x)": it just measures its error.
+#                It prints the coefficients (if it had to find them), SSE,
+#                MSE, RMSE, the variance of the response and R^2.
 # FORMULA (for reference — matches the slides' notation):
 #   MSE = sum( n_i * (y_i - prediction_i)^2 ) / N
 # PARAMETERS   :
-#   model : the model as text with only numbers and your data variables,
-#           e.g. "y = 3 + 0.5*x", "z = 2.2 - 1.05*x + 1.66*y",
-#           "y = 5.88*exp(-0.13*x)" or "y = 5.88*e^(-0.13*x)" (e = Euler's
-#           number). The variable before "=" is the real one.
+#   model : the model as text. The variable before "=" is the real one. Any
+#           letter that is not a data variable is an unknown to find (a, b, c).
+#           e means Euler's number. Examples: "y = a + b*x",
+#           "y = a*e^(b*x)", "y = 1/(a + b*x)", "y = a*x^2 + b*x + c",
+#           "y = 3 + 0.5*x" (all numbers given).
 #   data  : optional data.frame / list with the variables.
 #   n     : optional frequencies of each observation.
 # RETURNS      : Invisibly, a list with $mse, $sse, $rmse, $r_squared,
-#                $predicted and $residuals. It also prints them.
+#                $coefficients (if any were found), $predicted, $residuals.
 # EXAMPLE      :
-#   x <- c(1,2,3,4,5); y <- c(1,1,2,2,4)
-#   mse_of_model("y = -0.1 + 0.7*x")      # MSE = 0.22
+#   x <- c(0,1,2,3,6); y <- c(7,5,4,3.5,3)
+#   mse_of_model("y = a*e^(b*x)")        # MSE = 0.3755023843...
+#   mse_of_model("y = 5.88*e^(-0.13*x)") # same, with the numbers given
 # -----------------------------------------------------------------------------
 mse_of_model <- function(model, data = NULL, n = NULL) {
   caller <- parent.frame()
   env <- if (is.null(data)) caller else list2env(as.list(data), parent = caller)
   sides <- strsplit(model, "=", fixed = TRUE)[[1]]
-  if (length(sides) != 2) stop('Write the model with exactly one "=", e.g. "y = 3 + 0.5*x".')
+  if (length(sides) != 2) stop('Write the model with exactly one "=", e.g. "y = a + b*x".')
   resp_name <- trimws(sides[1])
   real <- get0(resp_name, envir = env, mode = "numeric")
   if (is.null(real)) stop("I can't find the variable `", resp_name, "` in your workspace or in `data`.")
+  N <- length(real)
+  if (!is.null(n) && length(n) != N) stop("`n` must have the same length as the data.")
   rhs <- parse(text = sides[2])[[1]]
   if (is.null(get0("e", envir = env, mode = "numeric")))     # e = Euler's number
     rhs <- do.call(substitute, list(rhs, list(e = exp(1))))
-  unknown <- Filter(function(s) is.null(get0(s, envir = env, mode = "numeric")), setdiff(all.vars(rhs), "pi"))
-  if (length(unknown) > 0)
-    stop("The model still has unknown letters (", paste(unknown, collapse = ", "),
-         "). Put numbers in them, or use fit_model() to find them.")
-  predicted <- rep_len(as.numeric(eval(rhs, env)), length(real))
-  if (!is.null(n) && length(n) != length(real)) stop("`n` must have the same length as the data.")
+  syms <- setdiff(all.vars(rhs), "pi")
+  is_data <- vapply(syms, function(z) {
+    v <- get0(z, envir = env, mode = "numeric"); !is.null(v) && length(v) == N
+  }, logical(1))
+  unknown <- syms[!is_data]
+  coefs <- NULL
+  if (length(unknown) > 0) {
+    vars <- setNames(lapply(c(resp_name, syms[is_data]), function(z) get(z, envir = env)),
+                     c(resp_name, syms[is_data]))
+    fit <- fit_model(model, data = vars, n = n, plot = FALSE)
+    predicted <- fit$fitted; coefs <- fit$coefficients
+  } else {
+    predicted <- rep_len(as.numeric(eval(rhs, env)), N)
+  }
   sse <- sse_fit(real, predicted, n); mse <- mse_fit(real, predicted, n)
+  r2 <- r_squared_fit(real, predicted, n)
   report_title(paste0("MSE OF THE MODEL:  ", model))
+  if (!is.null(coefs)) {
+    report_section("Unknown coefficients (found first by least squares)")
+    for (k in seq_along(coefs)) report_line(names(coefs)[k], coefs[k])
+  }
+  report_section("Error of the model")
   report_line("N (number of observations)", sum(freq_or_ones(real, n)))
   report_line("SSE (sum of squared errors)", sse)
   report_line("MSE (mean squared error = SSE / N)", mse)
   report_line(paste0("RMSE (typical error, in the units of ", resp_name, ")"), sqrt(mse))
-  report_line(paste0("R^2 (1 - MSE / variance of ", resp_name, ")"), r_squared_fit(real, predicted, n))
-  invisible(list(mse = mse, sse = sse, rmse = sqrt(mse),
-                 r_squared = r_squared_fit(real, predicted, n),
-                 predicted = predicted, residuals = real - predicted))
+  report_line(paste0("Variance of ", resp_name, " (divides by N)"), variance(real, n))
+  report_line("R^2 = 1 - MSE / variance", r2)
+  invisible(list(mse = mse, sse = sse, rmse = sqrt(mse), r_squared = r2,
+                 coefficients = coefs, predicted = predicted, residuals = real - predicted))
 }
 
 
