@@ -46,6 +46,7 @@
 #   Two lists of numbers x, y                  -> linear_regression(x, y, n)
 #   A two-way table (values or intervals)      -> analyze_table(tab, x_limits=, y_limits=)
 #   Two regression lines given as equations    -> analyze_regression_lines("..", "..")
+#   MSE of an equation that is already given  -> mse_of_model("y = 3 + 0.5*x")
 #   Any formula typed as text ("y = a*x^2+b*x+c", "y = a*exp(b*x)",
 #   "z = a + b*x + c*y")                       -> fit_model("...")
 #  Each prints an English report with all decimals and draws the plot.
@@ -67,7 +68,8 @@
 #       regression_y_on_x, regression_x_on_y, predict_linear,
 #       pearson_correlation, r_squared_from_slopes
 #  4. GOODNESS OF FIT (works for ANY model: linear, exponential, ...)
-#       sse_fit, mse_fit, r_squared_fit, variance_explained_fit
+#       sse_fit, mse_fit, r_squared_fit, variance_explained_fit,
+#       mse_of_model   <- MSE of a model given as text, e.g. "y = 3 + 0.5*x"
 #  5. NON-LINEAR FITS (turned into a straight line first)
 #       fit_exponential, predict_exponential,
 #       fit_hyperbolic, predict_hyperbolic,
@@ -100,10 +102,7 @@ options(digits = 15)
 
 # INTERNAL HELPERS (you do not need to call these yourself): write numbers
 # with ALL their digits (up to 15 significant), never rounded to 4 decimals.
-full_digits <- function(v) {
-  unname(vapply(v, function(z) format(z, digits = 15, scientific = FALSE,
-                                      trim = TRUE), character(1)))
-}
+# (full_digits() is defined in Chapter 1, which this file requires)
 # the same, but with " + " or " - " in front (so we never print "+ -0.8")
 signed_full <- function(v) {
   paste0(ifelse(v < 0, " - ", " + "), full_digits(abs(v)))
@@ -135,6 +134,7 @@ print.stat_fit <- function(x, ...) {
   cat("  ", x$equation, "\n\n", sep = "")
   cat(sprintf("  %-14s= %s\n", labels[1], full_digits(x$a)))
   cat(sprintf("  %-14s= %s\n", labels[2], full_digits(x$b)))
+  if (is.function(x$report)) x$report()
   invisible(x)
 }
 
@@ -699,6 +699,97 @@ variance_explained_fit <- function(actual, predicted, n = NULL) {
 }
 
 
+# -----------------------------------------------------------------------------
+# mse_of_model(model, data = NULL, n = NULL)
+# -----------------------------------------------------------------------------
+# WHAT IT DOES : Calculates the MSE (mean squared error) of a model whose
+#                numbers ARE ALREADY KNOWN, written as text like in the
+#                statement. No fitting is done: it just plugs your data into
+#                the formula and measures the error. It also gives SSE, RMSE
+#                and R^2. Use it when the exercise GIVES you the equation
+#                ("find the MSE of y = 3 + 0.5*x") or when you want to check
+#                a model you fitted by hand.
+#                (If the model has unknown letters a, b, c to find, use
+#                fit_model() instead: it fits AND gives the MSE.)
+# FORMULA (for reference — matches the slides' notation):
+#   MSE = sum( n_i * (y_i - prediction_i)^2 ) / N
+# PARAMETERS   :
+#   model : the model as text with only numbers and your data variables,
+#           e.g. "y = 3 + 0.5*x", "z = 2.2 - 1.05*x + 1.66*y",
+#           "y = 5.88*exp(-0.13*x)" or "y = 5.88*e^(-0.13*x)" (e = Euler's
+#           number). The variable before "=" is the real one.
+#   data  : optional data.frame / list with the variables.
+#   n     : optional frequencies of each observation.
+# RETURNS      : Invisibly, a list with $mse, $sse, $rmse, $r_squared,
+#                $predicted and $residuals. It also prints them.
+# EXAMPLE      :
+#   x <- c(1,2,3,4,5); y <- c(1,1,2,2,4)
+#   mse_of_model("y = -0.1 + 0.7*x")      # MSE = 0.22
+# -----------------------------------------------------------------------------
+mse_of_model <- function(model, data = NULL, n = NULL) {
+  caller <- parent.frame()
+  env <- if (is.null(data)) caller else list2env(as.list(data), parent = caller)
+  sides <- strsplit(model, "=", fixed = TRUE)[[1]]
+  if (length(sides) != 2) stop('Write the model with exactly one "=", e.g. "y = 3 + 0.5*x".')
+  resp_name <- trimws(sides[1])
+  real <- get0(resp_name, envir = env, mode = "numeric")
+  if (is.null(real)) stop("I can't find the variable `", resp_name, "` in your workspace or in `data`.")
+  rhs <- parse(text = sides[2])[[1]]
+  if (is.null(get0("e", envir = env, mode = "numeric")))     # e = Euler's number
+    rhs <- do.call(substitute, list(rhs, list(e = exp(1))))
+  unknown <- Filter(function(s) is.null(get0(s, envir = env, mode = "numeric")), setdiff(all.vars(rhs), "pi"))
+  if (length(unknown) > 0)
+    stop("The model still has unknown letters (", paste(unknown, collapse = ", "),
+         "). Put numbers in them, or use fit_model() to find them.")
+  predicted <- rep_len(as.numeric(eval(rhs, env)), length(real))
+  if (!is.null(n) && length(n) != length(real)) stop("`n` must have the same length as the data.")
+  sse <- sse_fit(real, predicted, n); mse <- mse_fit(real, predicted, n)
+  report_title(paste0("MSE OF THE MODEL:  ", model))
+  report_line("N (number of observations)", sum(freq_or_ones(real, n)))
+  report_line("SSE (sum of squared errors)", sse)
+  report_line("MSE (mean squared error = SSE / N)", mse)
+  report_line(paste0("RMSE (typical error, in the units of ", resp_name, ")"), sqrt(mse))
+  report_line(paste0("R^2 (1 - MSE / variance of ", resp_name, ")"), r_squared_fit(real, predicted, n))
+  invisible(list(mse = mse, sse = sse, rmse = sqrt(mse),
+                 r_squared = r_squared_fit(real, predicted, n),
+                 predicted = predicted, residuals = real - predicted))
+}
+
+
+# -----------------------------------------------------------------------------
+# INTERNAL: linearised_stats / report_linearised          (used by every fit that
+# works through a change of variable: exponential, hyperbolic, power)
+#   linearised_stats : fits the STRAIGHT LINE  Yt = A + B * Xt  (the transformed
+#       data) and returns A, B, the correlation r of the transformed data, r^2
+#       and the MSE of that straight line.
+#   report_linearised: prints it all in plain English.
+# -----------------------------------------------------------------------------
+linearised_stats <- function(Xt, Yt, n = NULL) {
+  B <- covariance(Xt, Yt, n) / variance(Xt, n)
+  A <- arithmetic_mean(Yt, n) - B * arithmetic_mean(Xt, n)
+  r <- covariance(Xt, Yt, n) / sqrt(variance(Xt, n) * variance(Yt, n))
+  list(A = A, B = B, r = r, r2 = r^2,
+       sse = sse_fit(Yt, A + B * Xt, n), mse = mse_fit(Yt, A + B * Xt, n))
+}
+
+report_linearised <- function(lin, line_text, A_text, B_text, back_text,
+                              resp, sse, mse, r2_original) {
+  report_section("Straight line after the change of variable")
+  cat("  ", line_text, "\n", sep = "")
+  report_line(A_text, lin$A)
+  report_line(B_text, lin$B)
+  for (b in back_text) report_line(b$label, b$value)
+  report_line("r (correlation coefficient of the transformed data)", lin$r)
+  report_line("MSE of the straight line (in transformed units)", lin$mse)
+  report_section(paste0("Goodness of the curve on the ORIGINAL ", resp, " values"))
+  report_line("SSE (sum of squared errors)", sse)
+  report_line("MSE (mean squared error = SSE / N)", mse)
+  report_line(paste0("RMSE (typical error, in the units of ", resp, ")"), sqrt(mse))
+  report_line(paste0("Variance of ", resp, " (Vy, divides by N)"), mse / (1 - r2_original))
+  report_line(paste0("R^2 OF THE COURSE = 1 - MSE / Vy"), r2_original)
+  
+}
+
 # =============================================================================
 # 5. NON-LINEAR FITS (turned into a straight line first, then fitted)
 # =============================================================================
@@ -729,16 +820,23 @@ variance_explained_fit <- function(actual, predicted, n = NULL) {
 #   predicted <- predict_exponential(model$a, model$b, x)
 #   r_squared_fit(y, predicted)                    # 0.81225
 # -----------------------------------------------------------------------------
-fit_exponential <- function(x, y) {
-  Y <- log(y)
-  b <- covariance(x, Y) / variance(x)
-  A <- arithmetic_mean(Y) - b * arithmetic_mean(x)
-  a <- exp(A)
+fit_exponential <- function(x, y, n = NULL) {
+  Xt <- x; Yt <- log(y)
+  lin <- linearised_stats(Xt, Yt, n)
+  a <- exp(lin$A)
+  b <- lin$B
+  fitted <- a * exp(b * x)
+  sse <- sse_fit(y, fitted, n); mse <- mse_fit(y, fitted, n)
   structure(list(
-    a = a, b = b,
+    a = a, b = b, A = lin$A, B = lin$B, r = lin$r, r_squared_linear = lin$r2,
+    mse_linear = lin$mse, sse = sse, mse = mse, rmse = sqrt(mse),
+    r_squared = r_squared_fit(y, fitted, n), lin = lin,
     equation = paste0("y = ", full_digits(a), " * e^(", full_digits(b), " * x)"),
     description = "Exponential fit y = a * e^(b*x)",
-    labels = c("a", "b")
+    labels = c("a", "b"),
+    report = function() report_linearised(lin, "ln(y) = A + B * x      with  A = ln(a)  and  B = b", "A = ln(a)  (intercept of the straight line)", "B = b  (slope of the straight line)",
+                                          list(list(label = "a", value = a), list(label = "b", value = b)),
+                                          "y", sse, mse, r_squared_fit(y, fitted, n))
   ), class = "stat_fit")
 }
 
@@ -784,15 +882,23 @@ predict_exponential <- function(a, b, x_new) {
 #   predicted <- predict_hyperbolic(model$a, model$b, x)
 #   r_squared_fit(y, predicted)                    # 0.85724
 # -----------------------------------------------------------------------------
-fit_hyperbolic <- function(x, y) {
-  Y <- 1 / y
-  b <- covariance(x, Y) / variance(x)
-  a <- arithmetic_mean(Y) - b * arithmetic_mean(x)
+fit_hyperbolic <- function(x, y, n = NULL) {
+  Xt <- x; Yt <- 1 / y
+  lin <- linearised_stats(Xt, Yt, n)
+  a <- lin$A
+  b <- lin$B
+  fitted <- 1 / (a + b * x)
+  sse <- sse_fit(y, fitted, n); mse <- mse_fit(y, fitted, n)
   structure(list(
-    a = a, b = b,
+    a = a, b = b, A = lin$A, B = lin$B, r = lin$r, r_squared_linear = lin$r2,
+    mse_linear = lin$mse, sse = sse, mse = mse, rmse = sqrt(mse),
+    r_squared = r_squared_fit(y, fitted, n), lin = lin,
     equation = paste0("y = 1 / (", full_digits(a), signed_full(b), " * x)"),
     description = "Hyperbolic fit y = 1 / (a + b*x)",
-    labels = c("a", "b")
+    labels = c("a", "b"),
+    report = function() report_linearised(lin, "1/y = A + B * x      with  A = a  and  B = b", "A = a  (intercept of the straight line)", "B = b  (slope of the straight line)",
+                                          list(list(label = "a", value = a), list(label = "b", value = b)),
+                                          "y", sse, mse, r_squared_fit(y, fitted, n))
   ), class = "stat_fit")
 }
 
@@ -837,16 +943,23 @@ predict_hyperbolic <- function(a, b, x_new) {
 #   predicted <- predict_power(model$a, model$b, x)
 #   r_squared_fit(y, predicted)
 # -----------------------------------------------------------------------------
-fit_power <- function(x, y) {
-  X <- log(x); Y <- log(y)
-  b <- covariance(X, Y) / variance(X)
-  A <- arithmetic_mean(Y) - b * arithmetic_mean(X)
-  a <- exp(A)
+fit_power <- function(x, y, n = NULL) {
+  Xt <- log(x); Yt <- log(y)
+  lin <- linearised_stats(Xt, Yt, n)
+  a <- exp(lin$A)
+  b <- lin$B
+  fitted <- a * x^b
+  sse <- sse_fit(y, fitted, n); mse <- mse_fit(y, fitted, n)
   structure(list(
-    a = a, b = b,
+    a = a, b = b, A = lin$A, B = lin$B, r = lin$r, r_squared_linear = lin$r2,
+    mse_linear = lin$mse, sse = sse, mse = mse, rmse = sqrt(mse),
+    r_squared = r_squared_fit(y, fitted, n), lin = lin,
     equation = paste0("y = ", full_digits(a), " * x^", full_digits(b)),
     description = "Power fit y = a * x^b",
-    labels = c("a", "b")
+    labels = c("a", "b"),
+    report = function() report_linearised(lin, "ln(y) = A + B * ln(x)      with  A = ln(a)  and  B = b", "A = ln(a)  (intercept of the straight line)", "B = b  (slope of the straight line)",
+                                          list(list(label = "a", value = a), list(label = "b", value = b)),
+                                          "y", sse, mse, r_squared_fit(y, fitted, n))
   ), class = "stat_fit")
 }
 
@@ -1009,6 +1122,8 @@ join_signed_terms <- function(values, labels, sep = " ") {
 #     fit_exponential(), fit_hyperbolic(), fit_power()): "y = a*exp(b*x)",
 #     "y = a*b^x", "y = 1/(a + b*x)", "y = a*x^b". Any other model that is not
 #     linear in its coefficients is refused with an explanation.
+#   * The letter e means Euler's number: "y = a*e^(b*x)" works like
+#     "y = a*exp(b*x)" (unless you have a data variable called e).
 #   * The plot (data + fitted curve, or observed vs fitted if there are
 #     several variables) is drawn automatically; plot = FALSE skips it.
 # FORMULA (for reference — the normal equations, as in the slides):
@@ -1046,6 +1161,8 @@ fit_model <- function(model, data = NULL, n = NULL, plot = TRUE) {
   }
   response_name <- trimws(sides[1])
   rhs <- parse(text = sides[2])[[1]]
+  if (is.null(get0("e", envir = env, mode = "numeric")))     # e = Euler's number
+    rhs <- do.call(substitute, list(rhs, list(e = exp(1))))
   response <- get0(response_name, envir = env, mode = "numeric")
   if (is.null(response)) {
     stop("I can't find the variable `", response_name,
@@ -1192,11 +1309,29 @@ print.model_fit <- function(x, ...) {
   filled <- gsub("+ -", "- ", filled, fixed = TRUE)
   report_section("Fitted model")
   cat("  ", x$response_name, " = ", filled, "\n", sep = "")
-  report_section("Goodness of fit")
+  if (!is.null(x$lin)) {
+    t <- x$lin_texts
+    A_lab <- switch(t$form, hyperbolic = paste0("A = ", t$P1), paste0("A = ln(", t$P1, ")"))
+    B_lab <- switch(t$form, exponential_base = paste0("B = ln(", t$P2, ")"), paste0("B = ", t$P2))
+    line_txt <- switch(t$form,
+                       exponential      = paste0("ln(", t$resp, ") = A + B * ", t$xname),
+                       exponential_base = paste0("ln(", t$resp, ") = A + B * ", t$xname),
+                       hyperbolic       = paste0("1/", t$resp, " = A + B * ", t$xname),
+                       power            = paste0("ln(", t$resp, ") = A + B * ln(", t$xname, ")"))
+    report_section("Straight line after the change of variable")
+    cat("  ", line_txt, "\n", sep = "")
+    report_line(paste0(A_lab, "  (intercept of the straight line)"), x$lin$A)
+    report_line(paste0(B_lab, "  (slope of the straight line)"), x$lin$B)
+    for (k in seq_along(x$params)) report_line(x$params[k], x$coefficients[k])
+    report_line("r (correlation coefficient of the transformed data)", x$lin$r)
+    report_line("MSE of the straight line (in transformed units)", x$lin$mse)
+  }
+  report_section(if (!is.null(x$lin)) paste0("Goodness of the curve on the ORIGINAL ", x$response_name, " values") else "Goodness of fit")
   report_line("SSE (sum of squared errors)", x$sse)
   report_line("MSE (mean squared error = SSE / N)", x$mse)
   report_line("RMSE (typical error, in the units of the response)", x$rmse)
-  report_line(paste0("R^2 (1 - MSE / variance of ", x$response_name, ")"), x$r_squared)
+  if (!is.null(x$lin)) report_line(paste0("Variance of ", x$response_name, " (Vy, divides by N)"), variance(x$response, x$weights))
+  report_line(paste0(if (!is.null(x$lin)) "R^2 OF THE COURSE = " else "R^2 = ", "1 - MSE / variance of ", x$response_name), x$r_squared)
   cat("  (R^2 close to 1 = the model explains almost all the variation)\n")
   invisible(x)
 }
@@ -1245,8 +1380,8 @@ fit_linearised_form <- function(form, model, response_name, rhs, params,
   P1 <- params[idx[1]]; P2 <- params[idx[2]]
   Xt <- if (f == "power") log(xv) else xv
   Yt <- if (f == "hyperbolic") 1 / response else log(response)
-  B <- covariance(Xt, Yt, n) / variance(Xt, n)
-  A <- arithmetic_mean(Yt, n) - B * arithmetic_mean(Xt, n)
+  lin <- linearised_stats(Xt, Yt, n)
+  A <- lin$A; B <- lin$B
   p <- switch(f, exponential = c(exp(A), B), exponential_base = c(exp(A), exp(B)),
               hyperbolic = c(A, B), power = c(exp(A), B))
   note <- switch(f,
@@ -1267,7 +1402,8 @@ fit_linearised_form <- function(form, model, response_name, rhs, params,
     fitted = fitted_values, residuals = response - fitted_values,
     sse = sse_fit(response, fitted_values, n), mse = mse_fit(response, fitted_values, n),
     rmse = sqrt(mse_fit(response, fitted_values, n)),
-    r_squared = r_squared_fit(response, fitted_values, n)
+    r_squared = r_squared_fit(response, fitted_values, n),
+    lin = lin, lin_texts = list(P1 = P1, P2 = P2, form = f, resp = response_name, xname = data_vars)
   ), class = "model_fit")
 }
 
