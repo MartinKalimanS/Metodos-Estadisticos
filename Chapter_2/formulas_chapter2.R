@@ -41,17 +41,70 @@
 #  midpoint of each interval, from Chapter 1's `class_mark()`) as the value
 #  that represents that interval, exactly like in Chapter 1.
 #
-#  QUICK GUIDE: ONE CALL PER EXERCISE TYPE  (read this first!)
-#  -----------------------------------------------------------
-#   Two lists of numbers x, y                  -> linear_regression(x, y, n)
-#   A two-way table (values or intervals)      -> analyze_table(tab, x_limits=, y_limits=)
-#   Two regression lines given as equations    -> analyze_regression_lines("..", "..")
-#   Only the MSE of a model (letters or numbers) -> mse_of_model("y = a*e^(b*x)")
-#   Any formula typed as text ("y = a*x^2+b*x+c", "y = a*exp(b*x)",
-#   "z = a + b*x + c*y")                       -> fit_model("...")
-#  Each prints an English report with all decimals and draws the plot.
-#  Text-typed formulas with several data variables use fit_model(); for
-#  non-linear forms a*e^(bx), 1/(a+bx), a*x^b it linearises automatically.
+#  CHEAT SHEET: EXACTLY WHAT TO TYPE FOR EACH CASE  (read this first!)
+#  ===================================================================
+#  Each call prints the full report (all decimals, English) and draws the plot.
+#  The FIRST variable you give is X and the second is Y.
+#  Frequencies always go in n and you must pass n to EVERY call.
+#
+#  COMPARE LINEAR / QUADRATIC / HYPERBOLIC / EXPONENTIAL AND PICK THE BEST
+#    One call, all 4 fits + ranking   compare_fits(x, y)
+#    With predictions / frequencies   compare_fits(x, y, predict_at = c(6,10))    compare_fits(x, y, n)
+
+#  TWO LISTS OF NUMBERS x, y (regression, correlation)
+#    No frequencies                 linear_regression(x, y)
+#    With frequencies               linear_regression(x, y, n)
+#    Predict y at x = 3.5 / x at y = 10
+#                                   linear_regression(x, y, n, predict_y_at = 3.5, predict_x_at = 10)
+#    Use the real names of the variables
+#                                   linear_regression(x, y, x_name = "hours", y_name = "grade")
+#    Only the covariance / only r   covariance(x, y, n)    pearson_correlation(x, y, n)
+#
+#  A TWO-WAY TABLE tab (rows = X, columns = Y)
+#    Values of X and Y              analyze_table(tab, x_values = c(1,2,3), y_values = c(10,20,30))
+#    Intervals (boundaries)         analyze_table(tab, x_limits = c(150,160,170,180),
+#                                                 y_limits = c(50,60,70,80),
+#                                                 x_name = "height", y_name = "weight")
+#    + distribution of Y given X=165 / of X given Y=65
+#                                   analyze_table(..., given_x = 165, given_y = 65)
+#    The rows of my table are Y     analyze_table(..., rows_are = "Y")
+#    Only "are they independent?"   is_independent(tab)
+#    Table -> pairs, for other functions
+#                                   p <- table_to_pairs(tab, x_marks, y_marks)
+#                                   linear_regression(p$x, p$y, p$n)
+#
+#  TWO REGRESSION LINES GIVEN AS EQUATIONS (which is which, r, means...)
+#    Identify them, means, r        analyze_regression_lines("y = 2 + 0.5*x", "x = 1 + 0.8*y")
+#    Not solved for x or y          analyze_regression_lines("3x + 2y = 20", "x + 4y = 15")
+#    + variances / covariance (give var_x, var_y, sd_x or sd_y)
+#                                   analyze_regression_lines(l1, l2, sd_x = 2)
+#    Remove / add an observation (N needed)
+#                                   analyze_regression_lines(l1, l2, N = 20, var_x = 4, remove = c(4,4))
+#                                   analyze_regression_lines(l1, l2, N = 20, var_x = 4, add = c(3,4))
+#
+#  FIT A MODEL WRITTEN AS TEXT (coefficient letters = a, b, c...; * always
+#  between coefficient and variable; parentheses in denominators / exponents)
+#    Straight line                  fit_model("y = a + b*x")
+#    Parabola                       fit_model("y = a*x^2 + b*x + c")
+#    Plane (two predictors)         fit_model("z = a + b*x + c*y")
+#    sin / cos, log, ...            fit_model("y = a*sin(x) + b*cos(x)")   fit_model("y = a + b*log(x)")
+#    Exponential                    fit_model("y = a*e^(b*x)")
+#    Hyperbolic                     fit_model("y = 1/(a + b*x)")
+#    Power                          fit_model("y = a*x^b")
+#    With frequencies               fit_model("y = a + b*x", n = n)
+#    Data in a table "pares"        fit_model("y = a + b*x", data = pares, n = pares$n)
+#    Predict with the fitted model  m <- fit_model("y = a*x^2 + b*x + c")
+#                                   predict_model(m, data.frame(x = c(6, 7)))
+#    Exponential / hyperbolic / power as in the slides (A = ln(a), r, MSE, R^2)
+#                                   fit_exponential(x, y, n)   fit_hyperbolic(x, y, n)   fit_power(x, y, n)
+#
+#  ONLY THE MSE
+#    Of a model with unknown a, b   mse_of_model("y = a*e^(b*x)")
+#    Of an equation already given   mse_of_model("y = 5.88*e^(-0.13*x)")
+#    Real vs predicted vectors      mse_fit(real, predicted, n)
+#
+#  COMMON MISTAKES: write b*x, never bx   |   1/(a + b*x), not 1/a + b*x
+#  |   pass n   |   the first variable is X.
 #
 #  INDEX (in the order of the slides)
 #  ------------------------------------
@@ -809,6 +862,17 @@ report_linearised <- function(lin, line_text, A_text, B_text, back_text,
   
 }
 
+# INTERNAL: draws the data (point size = frequency) and the fitted curve
+plot_curve_fit <- function(x, y, n, grid, curve_y, title, label) {
+  size <- if (is.null(n)) rep(1, length(x)) else n
+  plot(x, y, pch = 19, col = "steelblue", cex = sqrt(size), xlab = "x", ylab = "y",
+       main = paste0("Fit: ", title), ylim = range(c(y, curve_y), finite = TRUE))
+  lines(grid, curve_y, col = "firebrick", lwd = 2)
+  legend("topleft", legend = c("data (size = frequency)", "fitted curve"),
+         col = c("steelblue", "firebrick"), pch = c(19, NA), lty = c(NA, 1), bty = "n")
+  invisible(NULL)
+}
+
 # =============================================================================
 # 5. NON-LINEAR FITS (turned into a straight line first, then fitted)
 # =============================================================================
@@ -827,6 +891,8 @@ report_linearised <- function(lin, line_text, A_text, B_text, back_text,
 #   x : vector of X values (raw data; every y value must be positive,
 #       since the logarithm of a non-positive number does not exist).
 #   y : vector of Y values.
+#   n : (optional) how many times each pair appears.
+#   plot : TRUE (default) draws the data and the fitted curve; FALSE to skip.
 # RETURNS      : A list you can print directly for a readable summary
 #                ("Exponential fit y = a * e^(b*x) ... y = 5.8846 * e^(-0.1307*x)").
 #                It has $a and $b (the parameters), plus $equation (the
@@ -839,13 +905,17 @@ report_linearised <- function(lin, line_text, A_text, B_text, back_text,
 #   predicted <- predict_exponential(model$a, model$b, x)
 #   r_squared_fit(y, predicted)                    # 0.81225
 # -----------------------------------------------------------------------------
-fit_exponential <- function(x, y, n = NULL) {
+fit_exponential <- function(x, y, n = NULL, plot = TRUE) {
   Xt <- x; Yt <- log(y)
   lin <- linearised_stats(Xt, Yt, n)
   a <- exp(lin$A)
   b <- lin$B
   fitted <- a * exp(b * x)
   sse <- sse_fit(y, fitted, n); mse <- mse_fit(y, fitted, n)
+  if (plot) {
+    g <- seq(min(x), max(x), length.out = 300)
+    plot_curve_fit(x, y, n, g, a * exp(b * g), "exponential", "y = ")
+  }
   structure(list(
     a = a, b = b, A = lin$A, B = lin$B, r = lin$r, r_squared_linear = lin$r2,
     mse_linear = lin$mse, sse = sse, mse = mse, rmse = sqrt(mse),
@@ -901,13 +971,17 @@ predict_exponential <- function(a, b, x_new) {
 #   predicted <- predict_hyperbolic(model$a, model$b, x)
 #   r_squared_fit(y, predicted)                    # 0.85724
 # -----------------------------------------------------------------------------
-fit_hyperbolic <- function(x, y, n = NULL) {
+fit_hyperbolic <- function(x, y, n = NULL, plot = TRUE) {
   Xt <- x; Yt <- 1 / y
   lin <- linearised_stats(Xt, Yt, n)
   a <- lin$A
   b <- lin$B
   fitted <- 1 / (a + b * x)
   sse <- sse_fit(y, fitted, n); mse <- mse_fit(y, fitted, n)
+  if (plot) {
+    g <- seq(min(x), max(x), length.out = 300)
+    plot_curve_fit(x, y, n, g, 1 / (a + b * g), "hyperbolic", "y = ")
+  }
   structure(list(
     a = a, b = b, A = lin$A, B = lin$B, r = lin$r, r_squared_linear = lin$r2,
     mse_linear = lin$mse, sse = sse, mse = mse, rmse = sqrt(mse),
@@ -962,13 +1036,17 @@ predict_hyperbolic <- function(a, b, x_new) {
 #   predicted <- predict_power(model$a, model$b, x)
 #   r_squared_fit(y, predicted)
 # -----------------------------------------------------------------------------
-fit_power <- function(x, y, n = NULL) {
+fit_power <- function(x, y, n = NULL, plot = TRUE) {
   Xt <- log(x); Yt <- log(y)
   lin <- linearised_stats(Xt, Yt, n)
   a <- exp(lin$A)
   b <- lin$B
   fitted <- a * x^b
   sse <- sse_fit(y, fitted, n); mse <- mse_fit(y, fitted, n)
+  if (plot) {
+    g <- seq(min(x), max(x), length.out = 300)
+    plot_curve_fit(x, y, n, g, a * g^b, "power", "y = ")
+  }
   structure(list(
     a = a, b = b, A = lin$A, B = lin$B, r = lin$r, r_squared_linear = lin$r2,
     mse_linear = lin$mse, sse = sse, mse = mse, rmse = sqrt(mse),
@@ -1116,7 +1194,8 @@ join_signed_terms <- function(values, labels, sep = " ") {
 }
 
 # -----------------------------------------------------------------------------
-# fit_model(model, data = NULL, n = NULL, plot = TRUE)   <- THE SIMPLEST ONE TO USE
+# fit_model(model, data = NULL, n = NULL, plot = TRUE, method = "auto", start = NULL)
+#                                                  <- THE SIMPLEST ONE TO USE
 # -----------------------------------------------------------------------------
 # WHAT IT DOES : Fits ANY model that is linear in its unknown coefficients,
 #                and you write the model AS TEXT, exactly as the exam gives
@@ -1143,6 +1222,11 @@ join_signed_terms <- function(values, labels, sep = " ") {
 #     linear in its coefficients is refused with an explanation.
 #   * The letter e means Euler's number: "y = a*e^(b*x)" works like
 #     "y = a*exp(b*x)" (unless you have a data variable called e).
+#   * ANY OTHER formula works too, even if it is not linear in the coefficients
+#     (e.g. "y = a/(b + x)", "y = a*x^2 + b^x", "y = a + b*x^c"): the coefficients
+#     are then found by minimising SSE numerically. method = "numeric" forces
+#     this direct minimisation also for the linear / exponential / hyperbolic /
+#     power forms; start = c(a = 1, b = 2) gives the starting values.
 #   * The plot (data + fitted curve, or observed vs fitted if there are
 #     several variables) is drawn automatically; plot = FALSE skips it.
 # FORMULA (for reference — the normal equations, as in the slides):
@@ -1154,6 +1238,8 @@ join_signed_terms <- function(values, labels, sep = " ") {
 #   data  : optional data.frame or list with the variables (e.g. `pares`).
 #           Leave it out to use the variables you already created.
 #   plot  : FALSE to skip the plot.
+#   method: "auto" (default: the course method) or "numeric" (direct minimisation of SSE).
+#   start : optional starting values for the numeric method.
 #   n     : optional vector with how many times each observation repeats
 #           (its absolute frequency), exactly as in the rest of this file.
 # RETURNS      : An object that prints the normal equations (with YOUR letters
@@ -1171,7 +1257,8 @@ join_signed_terms <- function(values, labels, sep = " ") {
 #   fit_model("y = a*x^2 + b*x + c")       # a = -0.5, b = 0.3333..., c = 1.5833...
 #   fit_model("z = a + b*x + c*y")         # a = 2.2045..., b = -1.0568..., c = 1.6591...
 # -----------------------------------------------------------------------------
-fit_model <- function(model, data = NULL, n = NULL, plot = TRUE) {
+fit_model <- function(model, data = NULL, n = NULL, plot = TRUE,
+                      method = "auto", start = NULL) {
   caller <- parent.frame()
   env <- if (is.null(data)) caller else list2env(as.list(data), parent = caller)
   sides <- strsplit(model, "=", fixed = TRUE)[[1]]
@@ -1203,6 +1290,12 @@ fit_model <- function(model, data = NULL, n = NULL, plot = TRUE) {
          "variables for them, e.g. a, b, c.")
   }
   np <- length(params)
+  # typing mistake check: "bx" is ONE name in R, the product is b*x
+  glued <- params[nchar(params) > 1 & grepl("^[A-Za-z]+$", params)]
+  glue_hint <- if (length(glued) > 0)
+    paste0("\nCareful: R reads `", paste(glued, collapse = "`, `"), "` as ONE name. ",
+           "Write the product with * (for example b*x) and put parentheses where needed ",
+           "(1/(a + b*x) is NOT 1/a + b*x).") else ""
   
   # value of the right-hand side for given coefficient values
   value_of <- function(values) {
@@ -1212,6 +1305,12 @@ fit_model <- function(model, data = NULL, n = NULL, plot = TRUE) {
   }
   # exponential / hyperbolic / power models: recognised and fitted by
   # linearisation (like fit_exponential(), fit_hyperbolic(), fit_power())
+  if (method == "numeric") {
+    fit <- fit_numeric_nonlinear(model, response_name, rhs, params, data_vars, env,
+                                 response, n, value_of, start)
+    if (plot) plot_model_fit(fit)
+    return(fit)
+  }
   if (np == 2 && length(data_vars) == 1) {
     xv <- get(data_vars, envir = env)
     form <- recognize_nonlinear_form(value_of, xv)
@@ -1228,18 +1327,18 @@ fit_model <- function(model, data = NULL, n = NULL, plot = TRUE) {
     unit <- rep(0, np); unit[j] <- 1
     M[, j] <- value_of(unit) - offset
   }
-  if (any(!is.finite(M)) || any(!is.finite(offset))) {
-    stop("The model gives NA/Inf. Either it is not linear in the coefficients ",
-         "(for example y = 1/(a + b*x): use fit_hyperbolic(); y = a*x^b: use ",
-         "fit_power()), or a term fails for your data (for example log(0)).")
+  linear <- !(any(!is.finite(M)) || any(!is.finite(offset)))
+  if (linear) {
+    test <- 1.3 * (-1)^(1:np) * (1 + (1:np) / 7)  # is it really linear?
+    linear <- isTRUE(all.equal(value_of(test), as.vector(offset + M %*% test),
+                               tolerance = 1e-8))
   }
-  test <- 1.3 * (-1)^(1:np) * (1 + (1:np) / 7)  # is it really linear?
-  if (!isTRUE(all.equal(value_of(test), as.vector(offset + M %*% test),
-                        tolerance = 1e-8))) {
-    stop("This model is not linear in the coefficients (",
-         paste(params, collapse = ", "), "), so the normal equations can't ",
-         "be used directly (only a*e^(b*x), a*b^x, 1/(a+b*x) and a*x^b are ",
-         "recognised automatically).")
+  if (!linear) {                                 # any other model: numerical least squares
+    if (nzchar(glue_hint)) stop("The model could not be evaluated.", glue_hint)
+    fit <- fit_numeric_nonlinear(model, response_name, rhs, params, data_vars, env,
+                                 response, n, value_of, start)
+    if (plot) plot_model_fit(fit)
+    return(fit)
   }
   
   w <- if (is.null(n)) rep(1, N) else n
@@ -1353,6 +1452,64 @@ print.model_fit <- function(x, ...) {
   report_line(paste0(if (!is.null(x$lin)) "R^2 OF THE COURSE = " else "R^2 = ", "1 - MSE / variance of ", x$response_name), x$r_squared)
   cat("  (R^2 close to 1 = the model explains almost all the variation)\n")
   invisible(x)
+}
+
+# -----------------------------------------------------------------------------
+# INTERNAL: fit_numeric_nonlinear      (called by fit_model(); not called by you)
+#   For models that are NOT linear in their coefficients and are not one of the
+#   four forms of the slides (exponential, hyperbolic, power): it looks for the
+#   coefficients that minimise SSE = sum n_i (y_i - model_i)^2 directly,
+#   trying many starting points. There are no normal equations to show.
+# -----------------------------------------------------------------------------
+fit_numeric_nonlinear <- function(model, response_name, rhs, params, data_vars, env,
+                                  response, n, value_of, start = NULL) {
+  np <- length(params); N <- length(response)
+  w <- if (is.null(n)) rep(1, N) else n
+  sse_of <- function(p) {
+    v <- suppressWarnings(tryCatch(value_of(p), error = function(e) rep(NA_real_, N)))
+    if (any(!is.finite(v))) return(1e300)
+    sum(w * (response - v)^2)
+  }
+  old_seed <- if (exists(".Random.seed", envir = globalenv())) get(".Random.seed", envir = globalenv()) else NULL
+  set.seed(12345)
+  on.exit(if (!is.null(old_seed)) assign(".Random.seed", old_seed, envir = globalenv()), add = TRUE)
+  if (!is.null(start)) {
+    st <- if (!is.null(names(start))) start[params] else start
+    if (length(st) != np || anyNA(st)) stop("`start` needs one starting value per coefficient: ", paste(params, collapse = ", "), ".")
+    starts <- list(as.numeric(st))
+  } else {
+    starts <- c(list(rep(1, np), rep(0.5, np), rep(2, np), rep(0.1, np)),
+                lapply(1:40, function(i) runif(np, -3, 3)))
+  }
+  runs <- lapply(starts, function(p0) {
+    r <- tryCatch(optim(p0, sse_of, method = "Nelder-Mead",
+                        control = list(maxit = 20000, reltol = 1e-15)), error = function(e) NULL)
+    if (is.null(r)) return(NULL)
+    r2 <- tryCatch(optim(r$par, sse_of, method = "BFGS",
+                         control = list(maxit = 2000, reltol = 1e-15)), error = function(e) NULL)
+    if (!is.null(r2) && r2$value <= r$value) r2 else r
+  })
+  runs <- Filter(Negate(is.null), runs)
+  vals <- vapply(runs, function(r) r$value, numeric(1))
+  if (length(vals) == 0 || min(vals) >= 1e299)
+    stop("I could not find coefficients for this model. Check the formula, or give starting values with start = c(a = 1, b = 1).")
+  best <- runs[[which.min(vals)]]
+  agree <- sum(abs(vals - min(vals)) <= 1e-8 * max(1, min(vals)))
+  coefs <- setNames(best$par, params)
+  fitted_values <- value_of(best$par)
+  structure(list(
+    model = model, response_name = response_name, response = response, weights = n,
+    note = paste0("The model is NOT linear in its coefficients and it is not one of the forms of the slides,\n",
+                  "  so the coefficients were found by minimising SSE numerically (no normal equations).\n",
+                  "  ", agree, " of ", length(vals), " starting points reached this same minimum.",
+                  if (agree < 2 && is.null(start)) " If you are not sure, try other values with start = c(a = 1, b = 1)." else ""),
+    rhs = rhs, params = params, data_vars = data_vars, env = env,
+    normal_lhs = NULL, normal_rhs = NULL, coefficients = coefs,
+    fitted = fitted_values, residuals = response - fitted_values,
+    sse = sse_fit(response, fitted_values, n), mse = mse_fit(response, fitted_values, n),
+    rmse = sqrt(mse_fit(response, fitted_values, n)),
+    r_squared = r_squared_fit(response, fitted_values, n)
+  ), class = "model_fit")
 }
 
 # -----------------------------------------------------------------------------
@@ -1929,4 +2086,120 @@ analyze_regression_lines <- function(line1, line2, vars = c("x", "y"),
                       x_on_y = c(a = mx2 - bp2 * my2, b = bp2))
   }
   invisible(out)
+}
+
+
+# =============================================================================
+#  compare_fits(x, y, n = NULL, predict_at = NULL, plot = TRUE)
+# =============================================================================
+# FOR WHICH CASE : "Fit the linear, quadratic, hyperbolic and exponential models
+#                  and say which one is best / most suitable for prediction."
+#                  ONE call fits all 4 types of the "Types of Fitting" slide,
+#                  prints each one (equation, SSE, MSE, R^2), ranks them, says
+#                  which is the best and draws all 4 curves on one plot.
+# MODELS       : Linear      y = a + b*x
+#                Quadratic   y = a*x^2 + b*x + c
+#                Hyperbolic  y = 1/(a + b*x)     (fitted on 1/y, needs y != 0)
+#                Exponential y = a*e^(b*x)       (fitted on ln y, needs y > 0)
+#                A model that cannot be fitted (e.g. ln of y <= 0) is skipped
+#                and the reason is printed.
+# PARAMETERS   :
+#   x, y        : the data (vectors of the same length).
+#   n           : (optional) frequency of each pair.
+#   predict_at  : (optional) x value(s) where you want the prediction of every
+#                 model, e.g. predict_at = c(6, 10).
+#   plot        : TRUE draws the 4 curves.
+# CRITERION    : highest R^2 = lowest MSE (computed on the ORIGINAL y), the
+#                course criterion. R^2 = 1 - MSE / Var(y).
+# RETURNS      : (invisibly) a list with the table, each fit and the best one.
+# EXAMPLE      : compare_fits(c(1,2,3,4,5), c(1,1,2,4,8), predict_at = c(6,10))
+# =============================================================================
+compare_fits <- function(x, y, n = NULL, predict_at = NULL, plot = TRUE) {
+  if (length(x) != length(y)) stop("x and y must have the same length.")
+  w <- if (is.null(n)) rep(1, length(x)) else n
+  vy <- variance(y, n)
+  models <- list()
+  add <- function(name, eq, f, params) {
+    fit <- f(x)
+    sse <- sse_fit(y, fit, n)
+    models[[name]] <<- list(name = name, equation = eq, f = f, params = params,
+                            sse = sse, mse = sse / sum(w), r2 = 1 - (sse / sum(w)) / vy)
+  }
+  skipped <- character(0)
+  
+  # Linear
+  b <- covariance(x, y, n) / variance(x, n)
+  a <- arithmetic_mean(y, n) - b * arithmetic_mean(x, n)
+  add("Linear", paste0("y = ", full_digits(a), signed_full(b), " * x"),
+      function(t) a + b * t, c(a = a, b = b))
+  
+  # Quadratic (weighted least squares)
+  if (length(unique(x)) >= 3) {
+    cf <- coef(lm(y ~ I(x^2) + x, weights = w))
+    qa <- unname(cf[2 + 0]); qa <- unname(cf["I(x^2)"]); qb <- unname(cf["x"]); qc <- unname(cf["(Intercept)"])
+    add("Quadratic", paste0("y = ", full_digits(qa), " * x^2", signed_full(qb), " * x", signed_full(qc)),
+        function(t) qa * t^2 + qb * t + qc, c(a = qa, b = qb, c = qc))
+  } else skipped <- c(skipped, "Quadratic: needs at least 3 different x values")
+  
+  # Hyperbolic
+  if (all(y != 0)) {
+    h <- linearised_stats(x, 1 / y, n)
+    add("Hyperbolic", paste0("y = 1 / (", full_digits(h$A), signed_full(h$B), " * x)"),
+        function(t) 1 / (h$A + h$B * t), c(a = h$A, b = h$B))
+  } else skipped <- c(skipped, "Hyperbolic: some y = 0 (1/y undefined)")
+  
+  # Exponential
+  if (all(y > 0)) {
+    e <- linearised_stats(x, log(y), n)
+    ea <- exp(e$A); eb <- e$B
+    add("Exponential", paste0("y = ", full_digits(ea), " * e^(", full_digits(eb), " * x)"),
+        function(t) ea * exp(eb * t), c(a = ea, b = eb))
+  } else skipped <- c(skipped, "Exponential: some y <= 0 (ln y undefined)")
+  
+  tab <- data.frame(model = names(models),
+                    SSE = sapply(models, `[[`, "sse"), MSE = sapply(models, `[[`, "mse"),
+                    R2 = sapply(models, `[[`, "r2"), row.names = NULL)
+  tab <- tab[order(-tab$R2), ]
+  best <- tab$model[1]
+  
+  report_title("COMPARISON OF THE 4 FITS (Linear, Quadratic, Hyperbolic, Exponential)")
+  cat("Variance of y (Vy) =", full_digits(vy), "\n")
+  cat("R^2 = 1 - MSE / Vy   (measured on the ORIGINAL y)\n\n")
+  for (m in models) {
+    cat("---", m$name, "---\n")
+    cat("  ", m$equation, "\n")
+    for (i in seq_along(m$params)) cat("   ", names(m$params)[i], "=", full_digits(m$params[i]), "\n")
+    cat("   SSE =", full_digits(m$sse), "\n   MSE =", full_digits(m$mse),
+        "\n   R^2 =", full_digits(m$r2), "\n\n")
+  }
+  for (s in skipped) cat("SKIPPED ->", s, "\n")
+  cat("\nRANKING (best first):\n")
+  for (i in seq_len(nrow(tab)))
+    cat(sprintf("  %d. %-12s R^2 = %s   MSE = %s\n", i, tab$model[i],
+                full_digits(tab$R2[i]), full_digits(tab$MSE[i])))
+  cat("\nBEST MODEL:", best, " (highest R^2 and lowest MSE)\n")
+  if (best == "Quadratic")
+    cat("Note: the quadratic always has R^2 >= the linear one (it contains it) and can bend wrongly outside the data; check the plot before using it far from the data.\n")
+  
+  if (!is.null(predict_at)) {
+    cat("\nPREDICTIONS:\n")
+    pm <- sapply(models, function(m) m$f(predict_at))
+    pm <- matrix(pm, nrow = length(predict_at), dimnames = list(paste0("x = ", predict_at), names(models)))
+    for (i in seq_along(predict_at)) {
+      cat("  x =", predict_at[i], "\n")
+      for (nm in colnames(pm)) cat("     ", sprintf("%-12s", nm), full_digits(pm[i, nm]), "\n")
+    }
+  }
+  
+  if (plot) {
+    xr <- range(c(x, predict_at)); g <- seq(xr[1], xr[2], length.out = 300)
+    curves <- lapply(models, function(m) m$f(g))
+    yr <- range(c(y, unlist(curves)), finite = TRUE)
+    yr <- c(max(yr[1], min(y) - 2 * diff(range(y))), min(yr[2], max(y) + 2 * diff(range(y))))
+    cols <- c(Linear = "blue", Quadratic = "darkgreen", Hyperbolic = "orange", Exponential = "red")
+    plot(x, y, pch = 19, ylim = yr, xlim = xr, main = paste("Fits compared - best:", best))
+    for (nm in names(curves)) lines(g, curves[[nm]], col = cols[nm], lwd = if (nm == best) 3 else 1.5)
+    legend("topleft", legend = names(curves), col = cols[names(curves)], lwd = 2, bty = "n")
+  }
+  invisible(list(table = tab, models = models, best = best))
 }
