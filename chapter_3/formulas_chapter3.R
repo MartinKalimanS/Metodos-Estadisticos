@@ -1,7 +1,3 @@
-#SOURCES
-#source("chapter_1/formulas_chapter1.R")
-#source("chapter_2/formulas_chapter2.R")
-#source("chapter_3/formulas_chapter3.R")
 # =============================================================================
 #  CHAPTER 3 - TIME SERIES AND INDEX NUMBERS
 #  One R function for every kind of exercise in the Chapter 3 slides.
@@ -11,10 +7,10 @@
 #  HOW TO USE THIS FILE
 #  ---------------------
 #  1. Source Chapter 1 FIRST (this file reuses its printing helpers), then this
-#     file. If formulas_chapter1.R is in the same folder, it is loaded for you:
+#     file (if you forget Chapter 1, it tries to find it in the usual folders):
 #
-#         source("formulas_chapter1.R")
-#         source("formulas_chapter3.R")
+#         source("chapter_1/formulas_chapter1.R")
+#         source("chapter_3/formulas_chapter3.R")
 #
 #  2. Type the call that matches your exercise (see the cheat sheet below).
 #     Every main function prints a complete report in plain English with ALL
@@ -83,8 +79,9 @@
 # =============================================================================
 
 if (!exists("report_title") || !exists("full_digits")) {
-  if (file.exists("formulas_chapter1.R")) {
-    source("formulas_chapter1.R")
+  ch1 <- Filter(file.exists, c("formulas_chapter1.R", "chapter_1/formulas_chapter1.R", "../chapter_1/formulas_chapter1.R"))
+  if (length(ch1) > 0) {
+    source(ch1[1])
   } else {
     stop("Chapter 3 needs Chapter 1's functions. Run this first:\n",
          '  source("formulas_chapter1.R")\n',
@@ -100,27 +97,12 @@ options(digits = 15)
 
 # -----------------------------------------------------------------------------
 # INTERNAL HELPERS (you do not call these yourself)
-#   centred_moving_average : the moving average of order k of a vector.
-#       k odd  -> plain average of k values, placed at the middle one.
-#       k even -> average of k+1 values where the two EXTREMES count 0.5
-#                 (this centres it), divided by k.
 #   series_layout          : turns a vector (+ period, start) or a table
 #                            (rows = years, columns = seasons) into the layout
 #                            that decompose_series() works with.
 #   as_table               : puts a vector in the years x seasons table.
 #   show_table             : prints a table with "-" where there is no value.
 # -----------------------------------------------------------------------------
-centred_moving_average <- function(x, k) {
-  n <- length(x)
-  if (k < 2) stop("The order k of the moving average must be 2 or more.")
-  if (k >= n) stop("The order k (", k, ") must be smaller than the number of data (", n, ").")
-  w <- if (k %% 2 == 1) rep(1, k) / k else c(0.5, rep(1, k - 1), 0.5) / k
-  half <- length(w) %/% 2
-  out <- rep(NA_real_, n)
-  for (i in (half + 1):(n - half)) out[i] <- sum(w * x[(i - half):(i + half)])
-  out
-}
-
 default_season_names <- function(period) {
   if (period == 4)  return(c("Q1", "Q2", "Q3", "Q4"))
   if (period == 12) return(month.abb)
@@ -200,7 +182,12 @@ moving_average <- function(x, k, labels = NULL, name = NULL, plot = TRUE) {
   n <- length(x)
   if (is.null(labels)) labels <- seq_len(n)
   if (length(labels) != n) stop("`labels` must have one entry per value of the series.")
-  ma <- centred_moving_average(x, k)
+  if (k < 2) stop("The order k of the moving average must be 2 or more.")
+  if (k >= length(x)) stop("The order k (", k, ") must be smaller than the number of data (", length(x), ").")
+  w_ma <- if (k %% 2 == 1) rep(1, k) / k else c(0.5, rep(1, k - 1), 0.5) / k   # odd: plain mean; even: extremes x0.5
+  half_ma <- length(w_ma) %/% 2
+  ma <- rep(NA_real_, length(x))
+  for (i_ma in (half_ma + 1):(length(x) - half_ma)) ma[i_ma] <- sum(w_ma * x[(i_ma - half_ma):(i_ma + half_ma)])
   report_title(paste0("MOVING AVERAGE OF ORDER ", k, ":  ", nm))
   report_line("Number of observations (N)", n)
   report_line("Values that can be computed", sum(!is.na(ma)))
@@ -368,7 +355,13 @@ decompose_series <- function(x, period = NULL, start = NULL, model = "multiplica
   p <- L$period; n <- L$n; v <- L$values
   if (p < 2) stop("The period must be 2 or more.")
   if (n < 2 * p) stop("At least two full periods (", 2 * p, " data) are needed.")
-  tc  <- centred_moving_average(v, p)                       # trend-cycle
+  if (p < 2) stop("The order k of the moving average must be 2 or more.")
+  if (p >= length(v)) stop("The order k (", p, ") must be smaller than the number of data (", length(v), ").")
+  w_tc <- if (p %% 2 == 1) rep(1, p) / p else c(0.5, rep(1, p - 1), 0.5) / p   # odd: plain mean; even: extremes x0.5
+  half_tc <- length(w_tc) %/% 2
+  tc <- rep(NA_real_, length(v))
+  for (i_tc in (half_tc + 1):(length(v) - half_tc)) tc[i_tc] <- sum(w_tc * v[(i_tc - half_tc):(i_tc + half_tc)])
+  # tc = trend-cycle (centred moving average of order p)
   ea  <- if (mult) v / tc else v - tc                       # E.A
   raw <- vapply(seq_len(p), function(s) mean(ea[L$season == s], na.rm = TRUE), numeric(1))
   idx <- if (mult) raw * p / sum(raw) else raw - mean(raw)  # corrected

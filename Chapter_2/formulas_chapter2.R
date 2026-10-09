@@ -1659,8 +1659,13 @@ plot_regression_lines <- function(x, y, n = NULL, show_both = TRUE,
   if (show_both) {
     model_xy <- regression_x_on_y(x, y, n)
     # R_X/Y is x = a' + b'*y; rewritten as y = (x - a')/b' to draw it in the X-Y plane
-    abline(a = -model_xy$a / model_xy$b, b = 1 / model_xy$b,
-           col = "darkgreen", lwd = 2, lty = 2)
+    if (abs(model_xy$b) < 1e-12) {
+      # slope 0 (r = 0): the line x = a' is a VERTICAL line
+      abline(v = model_xy$a, col = "darkgreen", lwd = 2, lty = 2)
+    } else {
+      abline(a = -model_xy$a / model_xy$b, b = 1 / model_xy$b,
+             col = "darkgreen", lwd = 2, lty = 2)
+    }
     legend_labels <- c(legend_labels, paste0(x_name, " on ", y_name))
     legend_colors <- c(legend_colors, "darkgreen")
     legend_pch    <- c(legend_pch, NA)
@@ -1701,22 +1706,41 @@ describe_correlation <- function(r) {
   paste0(strength, if (nzchar(direction)) paste0(", ", direction) else " (no linear relationship)")
 }
 
-# INTERNAL: prints one regression line with its coefficients and errors
+# INTERNAL: one aligned line "name = value   -> meaning"
+kv_line <- function(name, value, note = "") {
+  cat(sprintf("  %-14s = %-22s %s\n", name, paste(full_digits(value), collapse = ", "),
+              if (nzchar(note)) paste0("<- ", note) else ""))
+}
+
+# INTERNAL: prints ONE regression line with everything related to it
 report_regression_line <- function(title, resp, pred, a, b, actual, fitted, n,
-                                   course_name, slope_formula, direction) {
-  report_section(title)
-  cat("  Course notation: ", course_name, "  (", direction, ")\n", sep = "")
-  cat("  Use it when you KNOW ", pred, " and want to ESTIMATE ", resp, ".\n", sep = "")
-  cat("  Equation:  ", resp, " = a + b * ", pred, "\n", sep = "")
-  cat("  Filled in: ", resp, " = ", full_digits(a), signed_full(b), " * ", pred, "\n", sep = "")
-  report_line(paste0("a  (intercept: value of ", resp, " when ", pred, " = 0)"), a)
-  report_line(paste0("b  (slope: change in ", resp, " for each +1 in ", pred, ")"), b)
-  cat("     (", slope_formula, ")\n", sep = "")
+                                   course_name, cv, var_pred, var_resp, mean_resp,
+                                   mean_pred, r2, prime = "") {
+  bar <- strrep("=", 72)
+  cat("\n", bar, "\n ", title, "\n", bar, "\n", sep = "")
+  cat("  COURSE NAME    : ", course_name, "\n", sep = "")
+  cat("  WHEN TO USE IT : you KNOW ", pred, " and want to ESTIMATE ", resp, "\n", sep = "")
+  cat("  GENERAL FORM   : ", resp, " = a + b * ", pred, "\n", sep = "")
+  cat("  WITH YOUR DATA : ", resp, " = ", full_digits(a), signed_full(b), " * ", pred, "\n", sep = "")
+  
+  cat("\n  Slope b", prime, "  (how much ", resp, " changes for each +1 in ", pred, ")\n", sep = "")
+  cat("     formula : b", prime, " = Cov(X,Y) / Var(", pred, ")\n", sep = "")
+  cat("     numbers : b", prime, " = ", full_digits(cv), " / ", full_digits(var_pred), " = ", full_digits(b), "\n", sep = "")
+  cat("  Intercept a", prime, "  (value of ", resp, " when ", pred, " = 0)\n", sep = "")
+  cat("     formula : a", prime, " = mean ", resp, " - b", prime, " * mean ", pred, "\n", sep = "")
+  cat("     numbers : a", prime, " = ", full_digits(mean_resp), " - (", full_digits(b), ") * ", full_digits(mean_pred),
+      " = ", full_digits(a), "\n", sep = "")
+  
   sse <- sse_fit(actual, fitted, n); mse <- mse_fit(actual, fitted, n)
-  cat("  Errors of this line (real ", resp, " minus predicted ", resp, "):\n", sep = "")
-  report_line("SSE (sum of squared errors)", sse)
-  report_line("MSE (mean squared error = SSE / N)", mse)
-  report_line(paste0("RMSE (typical error, in the units of ", resp, ")"), sqrt(mse))
+  cat("\n  ERRORS OF THIS LINE  (real ", resp, " minus estimated ", resp, ")\n", sep = "")
+  kv_line("SSE", sse, "sum of squared errors")
+  kv_line("MSE", mse, "SSE / N = mean squared error (this is the variance of the errors)")
+  kv_line("RMSE", sqrt(mse), paste0("sqrt(MSE) = typical error, in units of ", resp))
+  cat("\n  VARIANCE OF ", resp, " SPLIT IN TWO PARTS\n", sep = "")
+  kv_line(paste0("Var(", resp, ")"), var_resp, "total variance of the variable")
+  kv_line("explained", r2 * var_resp, "R^2 * Var = part the line explains")
+  kv_line("MSE", mse, "part the line does NOT explain  (explained + MSE = Var)")
+  kv_line("R^2", r2, "= 1 - MSE / Var = share of the variance explained by the line")
 }
 
 # -----------------------------------------------------------------------------
@@ -1761,32 +1785,56 @@ linear_regression <- function(x, y, n = NULL, x_name = NULL, y_name = NULL,
   r <- cv / sqrt(vx * vy)
   yx <- regression_y_on_x(x, y, n); xy <- regression_x_on_y(x, y, n)
   
+  mx <- arithmetic_mean(x, n); my <- arithmetic_mean(y, n)
+  sx <- sqrt(vx); sy <- sqrt(vy)
   report_title(paste0("LINEAR REGRESSION:  ", yn, " and ", xn))
-  report_line("Number of observations (N)", N)
-  cat("\n  There are TWO different regression lines, because each one minimizes the errors\n",
-      "  in a different direction (line 1: errors in ", yn, "; line 2: errors in ", xn, ").\n",
-      "  Solving line 1 for ", xn, " does NOT give line 2. Both cross at the point\n",
-      "  (mean of ", xn, ", mean of ", yn, ") = (", full_digits(arithmetic_mean(x, n)), ", ",
-      full_digits(arithmetic_mean(y, n)), ").\n", sep = "")
-  report_regression_line(paste0("Regression line 1: predicts ", yn, " from ", xn, "  (", yn, " on ", xn, ")"),
+  
+  cat("\n  GENERAL DATA\n")
+  kv_line("N", N, "number of observations")
+  kv_line(paste0("mean ", xn), mx, paste0("average of ", xn))
+  kv_line(paste0("mean ", yn), my, paste0("average of ", yn))
+  kv_line(paste0("Var(", xn, ")"), vx, "variance (divides by N)")
+  kv_line(paste0("Var(", yn, ")"), vy, "variance (divides by N)")
+  kv_line(paste0("sd(", xn, ")"), sx, "standard deviation = sqrt(variance)")
+  kv_line(paste0("sd(", yn, ")"), sy, "standard deviation = sqrt(variance)")
+  kv_line("Cov(X,Y)", cv, "covariance: sign tells the direction of the relationship")
+  kv_line("r", r, "correlation coefficient = Cov / (sd X * sd Y), between -1 and 1")
+  cat("                   Reading: ", describe_correlation(r), "\n", sep = "")
+  kv_line("R^2", r^2, "= r^2, share of the variance explained by a straight line")
+  
+  report_regression_line(paste0("REGRESSION LINE 1:  R_Y/X   (", yn, " on ", xn, ")"),
                          yn, xn, yx$a, yx$b, y, yx$a + yx$b * x, n,
-                         "R_Y/X, the regression of Y on X",
-                         paste0("b = Cov(", xn, ",", yn, ") / Var(", xn, "); a = mean ", yn, " - b * mean ", xn),
-                         paste0("Y = ", yn, ", X = ", xn))
-  report_regression_line(paste0("Regression line 2: predicts ", xn, " from ", yn, "  (", xn, " on ", yn, ")"),
+                         "R_Y/X  (regression of Y on X)", cv, vx, vy, my, mx, r^2)
+  report_regression_line(paste0("REGRESSION LINE 2:  R_X/Y   (", xn, " on ", yn, ")"),
                          xn, yn, xy$a, xy$b, x, xy$a + xy$b * y, n,
-                         "R_X/Y, the regression of X on Y",
-                         paste0("b' = Cov(", xn, ",", yn, ") / Var(", yn, "); a' = mean ", xn, " - b' * mean ", yn),
-                         paste0("X = ", xn, ", Y = ", yn))
-  report_section("Strength of the linear relationship")
-  report_line(paste0("Covariance of ", xn, " and ", yn), cv)
-  report_line("Correlation coefficient r (between -1 and 1)", r)
-  cat(sprintf("  %-62s %s\n", "", paste("->", describe_correlation(r))))
-  cat("     (r = Cov / (sd of ", xn, " * sd of ", yn, "); its sign is the sign of both slopes)\n", sep = "")
-  report_line("R^2 = r^2 (share of the variation explained by the line)", r^2)
-  report_line("Check: b (line 1) * b' (line 2) = r^2", yx$b * xy$b)
-  cat("  (R^2 is the same for both lines. The errors (SSE, MSE, RMSE) of the two lines\n",
-      "   are NOT comparable: line 1 is measured in ", yn, " units, line 2 in ", xn, " units.)\n", sep = "")
+                         "R_X/Y  (regression of X on Y)", cv, vy, vx, mx, my, r^2, prime = "'")
+  
+  bar <- strrep("=", 72)
+  cat("\n", bar, "\n ANALYSIS OF THE RESULTS\n", bar, "\n", sep = "")
+  cat("  1. Relationship: r = ", full_digits(r), " -> ", describe_correlation(r), ".\n", sep = "")
+  if (abs(r) < 1e-12) {
+    cat("     Cov = 0, so both slopes are 0: knowing one variable does not improve the\n",
+        "     estimate of the other with a straight line (each line just predicts the mean).\n", sep = "")
+    cat("     IMPORTANT: r = 0 means NO LINEAR relationship; it does NOT mean the variables\n",
+        "     are independent. The relationship could be curved (try a parabola).\n", sep = "")
+  } else {
+    cat("     The straight line explains ", full_digits(100 * r^2), "% of the variance (R^2 = ",
+        full_digits(r^2), ").\n", sep = "")
+    cat("     Each +1 in ", xn, " changes the estimate of ", yn, " by ", full_digits(yx$b),
+        " (line 1);\n     each +1 in ", yn, " changes the estimate of ", xn, " by ", full_digits(xy$b),
+        " (line 2).\n", sep = "")
+    cat(if (abs(r) >= 0.7) "     The linear model is appropriate for predicting.\n"
+        else "     The linear fit is weak: a non-linear model (parabola, exponential...) may fit better.\n")
+  }
+  cat("  2. Typical error: line 1 mistakes ", yn, " by about ", full_digits(sqrt(mse_fit(y, yx$a + yx$b * x, n))),
+      " (", yn, " has sd ", full_digits(sy), ");\n     line 2 mistakes ", xn, " by about ",
+      full_digits(sqrt(mse_fit(x, xy$a + xy$b * y, n))), " (", xn, " has sd ", full_digits(sx), ").\n", sep = "")
+  cat("     SSE/MSE/RMSE of the two lines are NOT comparable (different units).\n")
+  cat("  3. The two lines are different: line 1 minimises the errors in ", yn, ", line 2 in ", xn, ".\n",
+      "     Solving line 1 for ", xn, " does NOT give line 2. Both cross at\n",
+      "     (mean ", xn, ", mean ", yn, ") = (", full_digits(mx), ", ", full_digits(my), ").\n", sep = "")
+  cat("  4. Check: b * b' = ", full_digits(yx$b * xy$b), "  must equal  r^2 = ", full_digits(r^2),
+      "  (b * b' = r^2, and r^2 <= 1).\n", sep = "")
   if (!is.null(predict_y_at)) {
     report_section(paste0("Predictions of ", yn))
     for (v in predict_y_at) report_line(paste0("When ", xn, " = ", full_digits(v), ", predicted ", yn),
