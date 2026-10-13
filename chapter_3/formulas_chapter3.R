@@ -41,6 +41,41 @@
 #       decompose_series(tab, model = "additive")         # additive X = T+E+C+A
 #       decompose_series(tab, forecast = 4)               # + predict next 4 periods
 #
+#  "Find the components T, E, C and A" / "apply the multiplicative hypothesis"
+#  (SHORT version: only the 4 components and X = T.E.C.A for each period)
+#       time_series_components(tab)                       # or (x, period = 4, start = c(1980, 1))
+#       time_series_components(tab, model = "additive")   # X = T+E+C+A
+#       time_series_components(tab, forecast = 4)         # + prediction T*E
+#
+#  "Solve the exercise STEP BY STEP like in the slides" (T.C, E.A, indices,
+#  corrected indices, A, deseasonalised, regression line, true trend, C, prediction)
+#       time_series_steps(tab)                            # or (x, period = 4, start = c(1980, 1))
+#       time_series_steps(tab, forecast = 4)              # + step 10: prediction
+#       time_series_steps(tab, model = "additive")
+#
+#  WHICH `period` DO I USE?  (period = how many data there are in ONE cycle = columns of the table)
+#       quarterly data  (trimestral, Q1..Q4)         period = 4
+#       four-month data (cuatrimestral)              period = 3
+#       half-year data  (semestral)                  period = 2
+#       bimonthly data  (bimestral)                  period = 6
+#       monthly data                                 period = 12
+#       daily data, weekly cycle (Mon..Sun)          period = 7
+#       hourly data, daily cycle                     period = 24
+#       (a "trimestre" has 3 months -> 4 per year -> period 4;
+#        a "cuatrimestre" has 4 months -> 3 per year -> period 3)
+#       start = c(first year, first season), e.g. quarterly data from Q3 of 1990: start = c(1990, 3)
+#
+#  "Calculate the seasonal variation indices / corrected indices of the following
+#  table E.A (X / T.C)"  -> the exercise GIVES the table E.A (not the series X)
+#       Copy the table row by row between quotes, "-" where it has a dash:
+#       seasonal_indices("- - 1.0778 0.9337
+#                         1.1079 0.8764 1.1025 0.9246
+#                         1.0906 0.8743 1.0932 0.9337
+#                         1.1069 0.8932 1.0703 0.9573
+#                         1.0559 0.8829 - -",
+#                        season_names = c("Spring","Summer","Autumn","Winter"))
+#       (period = 4 columns by default; monthly table: period = 12)
+#
 #  The same, but the data is a single list of numbers:
 #       decompose_series(x, period = 4, start = c(1980, 1))
 #       (period = 4 quarterly, 12 monthly;  start = c(first year, first season))
@@ -72,7 +107,9 @@
 #  INDEX (in order of the slides)
 #  -------------------------------
 #  0. MAIN FUNCTIONS (one call = full answer)
-#       moving_average, trend_line, decompose_series, autocorrelation,
+#       moving_average, trend_line, decompose_series, time_series_components,
+#       time_series_steps, seasonal_indices,
+#       autocorrelation,
 #       index_numbers, simple_index, deflate, real_change
 #  1. INDEX NUMBER PROPERTIES
 #       invert_index, chain_index
@@ -146,6 +183,35 @@ as_table <- function(v, L) {
 }
 
 show_table <- function(m) print(m, na.print = "-")
+
+# INTERNAL: prints the final answer of a step inside a box so it stands out.
+answer_box <- function(lines) {
+  w <- max(nchar(lines)) + 4
+  bar <- strrep("*", w)
+  cat("\n  ", bar, "\n", sep = "")
+  for (l in lines) cat("  * ", formatC(l, width = -(w - 4), flag = "-"), " *\n", sep = "")
+  cat("  ", bar, "\n\n", sep = "")
+}
+
+# INTERNAL: says in plain words if a trend line goes UP, DOWN or is FLAT, how much it
+# changes, and how strong the line is (R^2). Used by every function that gives a trend.
+describe_trend <- function(a, b, n, r2 = NA) {
+  first <- a + b; last <- a + b * n
+  dir <- if (abs(b) < 1e-12) "FLAT (horizontal): there is no trend, the trend is centred around a constant"
+  else if (b > 0) "GOES UP  (increasing trend)" else "GOES DOWN  (decreasing trend)"
+  cat("  TREND DIRECTION : ", dir, "\n", sep = "")
+  if (abs(b) >= 1e-12) {
+    cat("  CHANGE          : ", if (b > 0) "+" else "-", full_digits(abs(b)), " per period;  from t = 1 (", full_digits(first),
+        ") to t = ", n, " (", full_digits(last), "): ", if (b > 0) "+" else "-", full_digits(abs(last - first)),
+        if (first != 0) paste0("  (", full_digits(100 * (last - first) / abs(first)), " % of the first value)") else "", "\n", sep = "")
+  }
+  if (!is.na(r2)) {
+    cat("  STRENGTH        : R^2 = ", full_digits(r2), "  -> ",
+        if (r2 >= 0.7) "the line follows the data well: the direction is CLEAR"
+        else if (r2 >= 0.3) "MODERATE: the direction is visible but the data move a lot around the line"
+        else "WEAK: the line explains little, the trend is almost flat compared with the ups and downs of the data", "\n", sep = "")
+  }
+}
 
 # -----------------------------------------------------------------------------
 # moving_average(x, k, labels = NULL, name = NULL, plot = TRUE)
@@ -260,7 +326,7 @@ trend_line <- function(x, labels = NULL, forecast = 0, name = NULL, plot = TRUE)
   cat("  ", nm, " = ", full_digits(a), signed_full_t(b), " * t\n", sep = "")
   report_line("a  (intercept: trend value at t = 0)", a)
   report_line(paste0("b  (slope: change of ", nm, " per period)"), b)
-  cat("  ->", if (b > 0) "the trend is INCREASING" else if (b < 0) "the trend is DECREASING" else "there is no trend", "\n")
+  describe_trend(a, b, n, r^2)
   report_section("Quality of the line")
   report_line("r (correlation of t and the series)", r)
   report_line("R^2 = r^2", r^2)
@@ -326,7 +392,19 @@ signed_full_t <- function(v) paste0(ifelse(v < 0, " - ", " + "), full_digits(abs
 #   x            : EITHER a table/matrix (rows = years, columns = seasons;
 #                  type it row by row with byrow = TRUE and put the years as
 #                  row names) OR a plain vector in time order.
-#   period       : only if x is a vector: 4 (quarterly), 12 (monthly)...
+#   period       : only if x is a vector: HOW MANY DATA THERE ARE IN ONE SEASONAL CYCLE
+#                  (usually in one year) = the number of columns of the table:
+#                    quarterly data  (trimestral, Q1..Q4)        -> period = 4
+#                    four-month data (cuatrimestral)             -> period = 3
+#                    half-year data  (semestral)                 -> period = 2
+#                    bimonthly data  (bimestral, every 2 months) -> period = 6
+#                    monthly data                                -> period = 12
+#                    daily data with a weekly cycle (Mon..Sun)   -> period = 7
+#                    hourly data with a daily cycle              -> period = 24
+#                  Careful: in Spanish a "trimestre" lasts 3 months, so a year
+#                  has 4 of them (period 4); a "cuatrimestre" lasts 4 months, so
+#                  a year has 3 of them (period 3). The period is NOT the length
+#                  of each season: it is how many seasons fit in the cycle.
 #   start        : only if x is a vector: c(first year, first season),
 #                  e.g. c(1980, 1). Default c(1, 1).
 #   model        : "multiplicative" (default, X = T.E.C.A) or "additive".
@@ -355,7 +433,6 @@ decompose_series <- function(x, period = NULL, start = NULL, model = "multiplica
   p <- L$period; n <- L$n; v <- L$values
   if (p < 2) stop("The period must be 2 or more.")
   if (n < 2 * p) stop("At least two full periods (", 2 * p, " data) are needed.")
-  if (p < 2) stop("The order k of the moving average must be 2 or more.")
   if (p >= length(v)) stop("The order k (", p, ") must be smaller than the number of data (", length(v), ").")
   w_tc <- if (p %% 2 == 1) rep(1, p) / p else c(0.5, rep(1, p - 1), 0.5) / p   # odd: plain mean; even: extremes x0.5
   half_tc <- length(w_tc) %/% 2
@@ -392,7 +469,8 @@ decompose_series <- function(x, period = NULL, start = NULL, model = "multiplica
   report_section(paste0("3. Seasonal variation indices, UNCORRECTED (mean of each season", if (mult) ", in %)" else ")"))
   print(raw * unit)
   report_line(paste0("Sum of the indices (should be ", if (mult) paste0(p * 100, " %") else "0", ")"), sum(raw) * unit)
-  cat("  -> They do not add up exactly, so they must be corrected.\n")
+  if (abs(sum(raw) * unit - (if (mult) p * 100 else 0)) < 1e-9) cat("  -> They already add up exactly, so the correction does not change them.\n")
+  else cat("  -> They do not add up exactly, so they must be corrected.\n")
   
   report_section(paste0("4. Seasonal variation indices, CORRECTED (normalised", if (mult) ", in %)" else ")"))
   print(idx * unit)
@@ -421,7 +499,7 @@ decompose_series <- function(x, period = NULL, start = NULL, model = "multiplica
   report_line("b  (slope: change of the trend per period)", b)
   report_line("r (correlation of t and the deseasonalised series)", r)
   report_line("R^2 = r^2", r^2)
-  cat("  -> the trend is ", if (b > 0) "INCREASING" else if (b < 0) "DECREASING" else "flat", "\n", sep = "")
+  describe_trend(a, b, n, r^2)
   report_section("   True (corrected) trend T of each period = a + b * t")
   show_table(as_table(tt, L))
   
@@ -455,6 +533,495 @@ decompose_series <- function(x, period = NULL, start = NULL, model = "multiplica
   invisible(list(trend_cycle = as_table(tc, L), ratio = as_table(ea, L), raw_indices = raw,
                  indices = idx, random = as_table(a_c, L), deseasonalised = as_table(des, L),
                  a = a, b = b, r = r, true_trend = as_table(tt, L), forecast = fc))
+}
+
+# -----------------------------------------------------------------------------
+# time_series_components(x, period = NULL, start = NULL, model = "multiplicative",
+#                        season_names = NULL, forecast = 0, name = NULL, plot = TRUE)
+# -----------------------------------------------------------------------------
+# WHAT IT DOES : CASE: "Find the components T, E, C and A of the series" /
+#                "apply the multiplicative (or additive) hypothesis". SHORT
+#                version of decompose_series(): it gives ONLY the four
+#                components and checks that they rebuild the series.
+#                  T = trend            (line a + b*t of the deseasonalised series)
+#                  E = seasonal index   (one per season, corrected)
+#                  C = cycle            (C = TC / T,  TC = moving average of order = period)
+#                  A = random component (A = X / (T * E * C))
+#                Then it rebuilds X = T * E * C * A (multiplicative) or
+#                X = T + E + C + A (additive) period by period.
+#                The first and last period/2 periods have no C and no A (the
+#                moving average is lost there).
+# PARAMETERS   : the same as decompose_series().
+#   period       : how many data there are in ONE seasonal cycle (see the list in
+#                  decompose_series): quarterly = 4, four-month = 3, half-year = 2,
+#                  bimonthly = 6, monthly = 12, daily with weekly cycle = 7.
+#   x, period, start, season_names : the series (vector + period, or a table
+#                                    with years as rows and seasons as columns).
+#   model        : "multiplicative" (default) or "additive".
+#   forecast     : (optional) number of future periods to predict. The
+#                  prediction uses T and E only (C and A are taken as neutral).
+# RETURNS      : Invisibly, a data.frame with t, X, TC, T, E, C, A and rebuilt X.
+# EXAMPLE      :
+#   time_series_components(x, period = 4, start = c(1980, 1))
+#   time_series_components(tab, forecast = 4)
+# -----------------------------------------------------------------------------
+time_series_components <- function(x, period = NULL, start = NULL, model = "multiplicative",
+                                   season_names = NULL, forecast = 0, name = NULL, plot = TRUE) {
+  nm <- if (is.null(name)) variable_label(deparse(substitute(x)), "X") else name
+  model <- match.arg(model, c("multiplicative", "additive"))
+  mult <- model == "multiplicative"
+  L <- series_layout(x, period, start, season_names)
+  n <- L$n; p <- L$period; v <- L$values
+  invisible(capture.output(res <- decompose_series(x, period = period, start = start, model = model,
+                                                   season_names = season_names, forecast = forecast,
+                                                   name = nm, plot = FALSE)))
+  pick <- function(m) m[cbind(L$row, L$col)]
+  tc  <- pick(res$trend_cycle)
+  tr  <- pick(res$true_trend)
+  E   <- unname(res$indices[L$season])
+  C   <- if (mult) tc / tr else tc - tr
+  A   <- if (mult) v / (tr * E * C) else v - tr - E - C
+  rebuilt <- if (mult) tr * E * C * A else tr + E + C + A
+  lab <- paste(L$year, L$season_names[L$season])
+  out <- data.frame(period = lab, t = seq_len(n), X = v, TC = tc, T = tr, E = E, C = C, A = A,
+                    rebuilt = rebuilt, stringsAsFactors = FALSE)
+  
+  bar <- strrep("=", 72)
+  report_title(paste0("TIME SERIES COMPONENTS (", model, " hypothesis):  ", nm))
+  cat("  ", if (mult) "X = T . E . C . A" else "X = T + E + C + A", "      (N = ", n, ", period = ", p, ")\n", sep = "")
+  cat("\n  T  TREND       T = a + b * t  (regression line of the deseasonalised series)\n")
+  cat("     T = ", full_digits(res$a), signed_full_t(res$b), " * t\n", sep = "")
+  describe_trend(res$a, res$b, n, res$r^2)
+  cat("  E  SEASONAL    one corrected index per season",
+      if (mult) " (multiplicative: they average 1)" else " (additive: they add up to 0)", "\n", sep = "")
+  for (s in seq_len(p))
+    cat(sprintf("       %-8s E = %s\n", L$season_names[s], full_digits(unname(res$indices[s]))))
+  cat("  C  CYCLE       C = ", if (mult) "TC / T" else "TC - T",
+      "   where TC = moving average of order ", p, "\n", sep = "")
+  cat("  A  RANDOM      A = ", if (mult) "X / (T * E * C)" else "X - T - E - C", "\n", sep = "")
+  
+  cat("\n", strrep("-", 72), "\n COMPONENTS OF EACH PERIOD\n", strrep("-", 72), "\n", sep = "")
+  fmt <- function(z) ifelse(is.na(z), "-", vapply(z, full_digits, character(1)))
+  m <- cbind(X = fmt(out$X), T = fmt(out$T), E = fmt(out$E), C = fmt(out$C), A = fmt(out$A),
+             rebuilt = fmt(out$rebuilt))
+  rownames(m) <- lab
+  colnames(m)[6] <- if (mult) "T*E*C*A" else "T+E+C+A"
+  print(m, quote = FALSE, right = TRUE)
+  ok <- !is.na(rebuilt)
+  cat("\n  Check: ", if (mult) "T*E*C*A" else "T+E+C+A", " rebuilds X in the ", sum(ok),
+      " periods where C and A exist (largest difference = ",
+      full_digits(max(abs(rebuilt[ok] - v[ok]))), ").\n", sep = "")
+  cat("  The other ", sum(!ok), " periods (the first and last ", p %/% 2,
+      ") have no C and no A, because the moving average is lost there.\n", sep = "")
+  
+  if (!is.null(res$forecast)) {
+    cat("\n", strrep("-", 72), "\n PREDICTION  (", if (mult) "T * E" else "T + E",
+        ": C and A are taken as neutral)\n", strrep("-", 72), "\n", sep = "")
+    f <- res$forecast
+    pm <- cbind(T = fmt(f$trend), E = fmt(f$seasonal_index), prediction = fmt(f$prediction))
+    rownames(pm) <- paste(f$year, f$season)
+    print(pm, quote = FALSE, right = TRUE)
+  }
+  
+  if (plot) {
+    xr <- c(1, n + max(forecast, 0))
+    plot(out$t, out$X, type = "b", pch = 19, col = "steelblue", xlim = xr, xlab = "t", ylab = nm,
+         main = "Series, trend-cycle and trend")
+    lines(out$t, out$TC, col = "darkgreen", lwd = 2)
+    tt <- seq(xr[1], xr[2]); lines(tt, res$a + res$b * tt, col = "firebrick", lwd = 2)
+    legend("topleft", legend = c(nm, "trend-cycle TC", "trend T"),
+           col = c("steelblue", "darkgreen", "firebrick"), lty = 1, bty = "n", cex = 0.8)
+  }
+  invisible(out)
+}
+
+# -----------------------------------------------------------------------------
+# time_series_steps(x, period = NULL, start = NULL, model = "multiplicative",
+#                   season_names = NULL, forecast = 0, name = NULL, plot = TRUE)
+# -----------------------------------------------------------------------------
+# WHAT IT DOES : CASE: "solve the whole exercise like in the slides". It does
+#                the complete decomposition STEP BY STEP, in the same order as
+#                the slides of Chapter 3. Each step says WHAT is done, the
+#                FORMULA, a WORKED EXAMPLE with your first numbers, and the
+#                RESULT table:
+#                  STEP 1  Trend-cycle T.C        (centred moving average, order = period)
+#                  STEP 2  Remove T.C             E.A = X / (T.C)
+#                  STEP 3  Seasonal indices       (mean of each season) + interpretation
+#                  STEP 4  Corrected indices      (normalised so they add up to 400 %)
+#                  STEP 5  Random component A     A = (E.A) / corrected index
+#                  STEP 6  Deseasonalised series  X / E
+#                  STEP 7  Regression line        deseasonalised X = a + b * t
+#                  STEP 8  True trend T           T = a + b * t of every period
+#                  STEP 9  Cycle C and check      C = TC / T,  X = T.E.C.A
+#                  STEP 10 Prediction (if forecast > 0)   trend x corrected index
+#                For the SHORT answers use time_series_components() (only
+#                T, E, C, A) or decompose_series() (all the tables, compact).
+# PARAMETERS   : the same as decompose_series().
+#   period       : how many data there are in ONE seasonal cycle (see the list in
+#                  decompose_series): quarterly = 4, four-month = 3, half-year = 2,
+#                  bimonthly = 6, monthly = 12, daily with weekly cycle = 7.
+#   x, period, start, season_names : the series (vector + period, or a table
+#                                    with years as rows and seasons as columns).
+#   model        : "multiplicative" (default) or "additive".
+#   forecast     : (optional) number of future periods to predict.
+#   plot         : FALSE to skip the plots.
+# RETURNS      : Invisibly, the same list as decompose_series().
+# EXAMPLE      :
+#   time_series_steps(x, period = 4, start = c(1980, 1), forecast = 4)
+#   time_series_steps(tab)                       # table years x seasons
+# -----------------------------------------------------------------------------
+time_series_steps <- function(x, period = NULL, start = NULL, model = "multiplicative",
+                              season_names = NULL, forecast = 0, name = NULL, plot = TRUE) {
+  nm <- if (is.null(name)) variable_label(deparse(substitute(x)), "X") else name
+  model <- match.arg(model, c("multiplicative", "additive"))
+  mult <- model == "multiplicative"
+  old_width <- options(width = max(getOption("width"), 150)); on.exit(options(old_width), add = TRUE)  # tables do not wrap
+  L <- series_layout(x, period, start, season_names)
+  n <- L$n; p <- L$period; v <- L$values
+  invisible(capture.output(res <- decompose_series(x, period = period, start = start, model = model,
+                                                   season_names = season_names, forecast = forecast,
+                                                   name = nm, plot = plot)))
+  pick <- function(m) m[cbind(L$row, L$col)]
+  tc <- pick(res$trend_cycle); ea <- pick(res$ratio); des <- pick(res$deseasonalised)
+  tr <- pick(res$true_trend);  ac <- pick(res$random)
+  idx <- res$indices; raw <- res$raw_indices
+  sn <- L$season_names
+  fm <- function(z) paste(vapply(z, full_digits, character(1)), collapse = ", ")
+  op <- if (mult) "/" else "-"
+  unit <- if (mult) 100 else 1
+  step <- function(num, title, what, formula = NULL) {
+    cat("\n", strrep("=", 72), "\n STEP ", num, ":  ", title, "\n", strrep("=", 72), "\n", sep = "")
+    cat("  WHAT WE DO : ", what, "\n", sep = "")
+    if (!is.null(formula)) cat("  FORMULA    : ", formula, "\n", sep = "")
+  }
+  
+  report_title(paste0("TIME SERIES, STEP BY STEP (", model, "):  ", nm))
+  cat("  Model: ", if (mult) "X = T . E . C . A" else "X = T + E + C + A",
+      "     T = trend, E = seasonal, C = cycle, A = random\n", sep = "")
+  report_line("Number of observations (N)", n)
+  report_line("Period of the seasonality", p)
+  cat("  The data, one row per year and one column per season:\n")
+  show_table(as_table(v, L))
+  
+  # STEP 1
+  step(1, paste0("T.C = MOVING AVERAGE of order ", p, " of X     [trend-cycle]"),
+       paste0("Smooth the series with a centred moving average of order ", p,
+              " (the period of the seasonality), which removes E and A."),
+       if (p %% 2 == 0) paste0("TC_t = (0.5 X_(t-", p %/% 2, ") + X_(t-", p %/% 2 - 1, ") + ... + X_(t+",
+                               p %/% 2 - 1, ") + 0.5 X_(t+", p %/% 2, ")) / ", p, "     (extremes x 0.5)")
+       else paste0("TC_t = (X_(t-", (p - 1) %/% 2, ") + ... + X_(t+", (p - 1) %/% 2, ")) / ", p))
+  i0 <- which(!is.na(tc))[1]; h <- p %/% 2
+  if (p %% 2 == 0) {
+    terms <- c(paste0("0.5*", full_digits(v[i0 - h])), vapply(v[(i0 - h + 1):(i0 + h - 1)], full_digits, character(1)),
+               paste0("0.5*", full_digits(v[i0 + h])))
+  } else terms <- vapply(v[(i0 - h):(i0 + h)], full_digits, character(1))
+  cat("  EXAMPLE    : first value (", L$year[i0], " ", sn[L$season[i0]], "):\n",
+      "               (", paste(terms, collapse = " + "), ") / ", p, " = ", full_digits(tc[i0]), "\n", sep = "")
+  cat("  >>> ANSWER  T.C =\n"); show_table(as_table(tc, L))
+  cat("  (The first and last ", h, " periods are lost: there are not enough data around them.)\n", sep = "")
+  tcv <- tc[!is.na(tc)]
+  cat("  TREND-CYCLE DIRECTION : from the first (", full_digits(tcv[1]), ") to the last (", full_digits(tcv[length(tcv)]),
+      ") value of T.C it ", if (tcv[length(tcv)] > tcv[1]) "GOES UP" else if (tcv[length(tcv)] < tcv[1]) "GOES DOWN" else "stays FLAT",
+      " (", if (tcv[length(tcv)] >= tcv[1]) "+" else "-", full_digits(abs(tcv[length(tcv)] - tcv[1])), ")\n", sep = "")
+  
+  # STEP 2
+  step(2, paste0("E.A = ", if (mult) "X / (T.C)" else "X - (T.C)", "     [remove the trend-cycle]"),
+       paste0(if (mult) "Divide the series by T.C (X / T.C)" else "Subtract T.C from the series (X - T.C)", ": only the seasonal and random components remain."),
+       if (mult) "X / (T.C) = (T.E.C.A) / (T.C) = E.A" else "X - (T+C) = E + A")
+  cat("  EXAMPLE    : ", L$year[i0], " ", sn[L$season[i0]], ":  ", full_digits(v[i0]), " ", op, " ",
+      full_digits(tc[i0]), " = ", full_digits(ea[i0]), "\n", sep = "")
+  cat("  >>> ANSWER  E.A =\n"); show_table(as_table(ea, L))
+  
+  # STEP 3
+  step(3, "E (uncorrected) = MEAN of E.A in each season     [seasonal indices]",
+       "Average each season over the years: this removes the random component A.",
+       "I_season = mean of the E.A values of that season")
+  s1 <- ea[L$season == 1 & !is.na(ea)]
+  cat("  EXAMPLE    : ", sn[1], ":  (", paste(vapply(s1, full_digits, character(1)), collapse = " + "), ") / ",
+      length(s1), " = ", full_digits(raw[1]), if (mult) paste0("  =>  ", full_digits(raw[1] * 100), " %") else "", "\n", sep = "")
+  cat("  TABLE      : the table E.A of step 2 with the mean of each column added at the bottom:\n")
+  m3 <- rbind(as_table(ea, L), `MEAN=index` = raw)
+  show_table(m3)
+  cat("  The indices", if (mult) " (in %)" else "", ":\n", sep = "")
+  for (k in seq_len(p)) cat(sprintf("     %-10s %s%s\n", sn[k], full_digits(raw[k] * unit), if (mult) " %" else ""))
+  report_line(paste0("Sum of the indices (should be ", if (mult) paste0(p * 100, " %") else "0", ")"), sum(raw) * unit)
+  if (abs(sum(raw) * unit - (if (mult) p * 100 else 0)) < 1e-9) {
+    cat("  -> The indices already add up exactly: step 4 will not change them (correction factor 1).\n")
+  } else cat("  -> The indices do not add up exactly, so they must be CORRECTED (step 4).\n")
+  cat("  >>> ANSWER  E (uncorrected seasonal indices) =\n")
+  for (k in seq_len(p)) cat(sprintf("        %-10s %s%s\n", sn[k], full_digits(raw[k]),
+                                    if (mult) paste0("   (", full_digits(raw[k] * 100), " %)") else ""))
+  
+  # STEP 4
+  step(4, paste0("E' = ", if (mult) paste0(p * 100, " / (sum of E in %) * E") else "E - mean(E)", "     [corrected / normalised indices]"),
+       paste0("Adjust the indices so that they add up exactly to ", if (mult) paste0(p * 100, " %") else "0", "."),
+       if (mult) paste0("I' = ", p * 100, " / (sum of the indices in %) * I") else "I' = I - mean(I)")
+  if (mult) {
+    cat("  EXAMPLE    : ", sn[1], ":  ", p * 100, " / ", full_digits(sum(raw) * 100), " * ", full_digits(raw[1] * 100),
+        " = ", full_digits(idx[1] * 100), " %\n", sep = "")
+  } else cat("  EXAMPLE    : ", sn[1], ":  ", full_digits(raw[1]), " - (", full_digits(mean(raw)), ") = ",
+             full_digits(idx[1]), "\n", sep = "")
+  if (mult) cat("  CORRECTION FACTOR : ", p * 100, " / ", full_digits(sum(raw) * 100), " = ", full_digits(p * 100 / (sum(raw) * 100)),
+                if (abs(sum(raw) * 100 - p * 100) < 1e-9) "   (the indices already added up: nothing changes)" else "", "\n", sep = "")
+  cat("  TABLE      : the indices before and after the correction", if (mult) " (in %)" else "", ":\n", sep = "")
+  m4 <- rbind(`uncorrected (step 3)` = raw * unit, `CORRECTED I'` = idx * unit)
+  colnames(m4) <- sn
+  print(m4)
+  report_line("Sum of the corrected indices", sum(idx) * unit)
+  cat("  NORMALISED TABLE  (the corrected index", if (mult) " in %" else "", " placed in every period; it is the E used in steps 5 and 6):\n", sep = "")
+  show_table(as_table(unname(idx[L$season]) * unit, L))
+  cat("  INTERPRETATION:\n")
+  for (k in seq_len(p)) {
+    if (mult) {
+      d <- idx[k] * 100 - 100
+      cat(sprintf("     %-10s %s %% %s than the annual average\n", sn[k], full_digits(abs(d)), if (d >= 0) "HIGHER" else "LOWER"))
+    } else cat(sprintf("     %-10s %s %s the annual average\n", sn[k], full_digits(abs(idx[k])), if (idx[k] >= 0) "ABOVE" else "BELOW"))
+  }
+  cat("  >>> ANSWER  E' (corrected seasonal indices) =\n")
+  for (k in seq_len(p)) cat(sprintf("        %-10s %s%s\n", sn[k], full_digits(idx[k]),
+                                    if (mult) paste0("   (", full_digits(idx[k] * 100), " %)") else ""))
+  
+  # STEP 5
+  step(5, paste0("A = ", if (mult) "(E.A) / E'" else "(E+A) - E'", "     [random component]"),
+       paste0("Remove the corrected seasonal index from E.A: what is left is A (it should be close to ", if (mult) "1" else "0", ")."),
+       if (mult) "A = (E.A) / I'" else "A = (E+A) - I'")
+  cat("  EXAMPLE    : ", L$year[i0], " ", sn[L$season[i0]], ":  ", full_digits(ea[i0]), " ", op, " ",
+      full_digits(idx[L$season[i0]]), " = ", full_digits(ac[i0]), "\n", sep = "")
+  cat("  >>> ANSWER  A =\n"); show_table(as_table(ac, L))
+  
+  # STEP 6
+  step(6, paste0(if (mult) "X / E' = T.C.A" else "X - E' = T+C+A", "     [deseasonalised series]"),
+       paste0("Remove the seasonal component from the ORIGINAL series (", if (mult) "divide" else "subtract", " by I')."),
+       if (mult) "X / E  = T.C.A" else "X - E = T+C+A")
+  cat("  EXAMPLE    : ", L$year[1], " ", sn[L$season[1]], ":  ", full_digits(v[1]), " ", op, " ",
+      full_digits(idx[L$season[1]]), " = ", full_digits(des[1]), "\n", sep = "")
+  cat("  >>> ANSWER  X", op, "E' =\n", sep = ""); show_table(as_table(des, L))
+  
+  # STEP 7
+  tt <- seq_len(n)
+  step(7, paste0(if (mult) "X / E'" else "X - E'", " = a + b*t     [regression line of the deseasonalised series]"),
+       paste0("Number the periods t = 1, ..., ", n, " and fit the least-squares line to the deseasonalised series."),
+       "deseasonalised X = a + b * t,     b = Cov(t, X/E) / Var(t),     a = mean(X/E) - b * mean(t)")
+  vt <- mean(tt^2) - mean(tt)^2; cvt <- mean(tt * des) - mean(tt) * mean(des)
+  cat("  NUMBERS    : mean(t) = ", full_digits(mean(tt)), ",  mean(X/E) = ", full_digits(mean(des)),
+      ",  Var(t) = ", full_digits(vt), ",  Cov(t, X/E) = ", full_digits(cvt), "\n", sep = "")
+  cat("               b = ", full_digits(cvt), " / ", full_digits(vt), " = ", full_digits(res$b), "\n", sep = "")
+  cat("               a = ", full_digits(mean(des)), " - (", full_digits(res$b), ") * ", full_digits(mean(tt)),
+      " = ", full_digits(res$a), "\n", sep = "")
+  answer_box(c(paste0(">>> ANSWER  STEP 7:  REGRESSION LINE"),
+               "",
+               paste0("X", op, "E' = ", full_digits(res$a), signed_full_t(res$b), " * t"),
+               "",
+               paste0("a = ", full_digits(res$a)),
+               paste0("b = ", full_digits(res$b))))
+  report_line("r (correlation of t and X/E)", res$r)
+  report_line("R^2 = r^2", res$r^2)
+  describe_trend(res$a, res$b, n, res$r^2)
+  
+  # STEP 8
+  step(8, "T = a + b*t     [true (corrected) trend]",
+       "Evaluate the regression line at the t of every period.", "T_t = a + b * t")
+  cat("  EXAMPLE    : t = 1 (", L$year[1], " ", sn[L$season[1]], "):  ", full_digits(res$a), signed_full_t(res$b),
+      " * 1 = ", full_digits(tr[1]), "\n", sep = "")
+  cat("  >>> ANSWER  T =\n"); show_table(as_table(tr, L))
+  describe_trend(res$a, res$b, n, res$r^2)
+  
+  # STEP 9
+  cyc <- if (mult) tc / tr else tc - tr
+  rebuilt <- if (mult) tr * idx[L$season] * cyc * ac else tr + idx[L$season] + cyc + ac
+  step(9, paste0("C = ", if (mult) "(T.C) / T" else "(T.C) - T", ";   X = ", if (mult) "T.E.C.A" else "T+E+C+A", "     [cycle and check]"),
+       "The trend-cycle T.C contains the trend T and the cycle C: separate them, then rebuild X.",
+       if (mult) "C = (T.C) / T,     X = T . E . C . A" else "C = (T.C) - T,     X = T + E + C + A")
+  cat("  EXAMPLE    : ", L$year[i0], " ", sn[L$season[i0]], ":  C = ", full_digits(tc[i0]), " ", op, " ",
+      full_digits(tr[i0]), " = ", full_digits(cyc[i0]), "\n", sep = "")
+  cat("               ", if (mult) "T.E.C.A" else "T+E+C+A", " = ", full_digits(tr[i0]), if (mult) " * " else " + ",
+      full_digits(idx[L$season[i0]]), if (mult) " * " else " + ", full_digits(cyc[i0]), if (mult) " * " else " + ",
+      full_digits(ac[i0]), " = ", full_digits(rebuilt[i0]), "   (X = ", full_digits(v[i0]), ")\n", sep = "")
+  cat("  >>> ANSWER  C =\n"); show_table(as_table(cyc, L))
+  ok <- !is.na(rebuilt)
+  cat("  CHECK      : ", if (mult) "T.E.C.A" else "T+E+C+A", " gives back X in the ", sum(ok),
+      " periods where C and A exist (largest difference ", full_digits(max(abs(rebuilt[ok] - v[ok]))), ").\n", sep = "")
+  
+  # STEP 10
+  if (!is.null(res$forecast)) {
+    f <- res$forecast
+    step(10, paste0("X_t = (a + b*t) ", if (mult) "*" else "+", " E'     [prediction]"),
+         paste0("Predict the next periods: trend of the future period ", if (mult) "x" else "+", " corrected seasonal index."),
+         paste0("X_t = (a + b * t) ", if (mult) "*" else "+", " I'"))
+    f1 <- f[1, ]
+    cat("  EXAMPLE    : ", f1$year, " ", f1$season, " (t = ", f1$t, "):  (", full_digits(res$a), signed_full_t(res$b),
+        " * ", f1$t, ") ", if (mult) "*" else "+", " ", full_digits(f1$seasonal_index), " = ",
+        full_digits(f1$trend), if (mult) " * " else " + ", full_digits(f1$seasonal_index), " = ", full_digits(f1$prediction), "\n", sep = "")
+    cat("  >>> ANSWER  X_t (prediction) =\n"); print(f, row.names = FALSE)
+  }
+  
+  # ---------------------------------------------------------------- SUMMARY
+  cat("\n", strrep("#", 72), "\n  FINAL SUMMARY OF ALL THE VALUES  (in the order they were calculated)\n",
+      strrep("#", 72), "\n", sep = "")
+  cat("\n  A) PER SEASON  (steps 3 and 4)\n")
+  sm <- cbind(uncorrected = vapply(raw * unit, full_digits, character(1)),
+              corrected = vapply(idx * unit, full_digits, character(1)),
+              meaning = vapply(seq_len(p), function(k) {
+                d <- if (mult) idx[k] * 100 - 100 else idx[k]
+                paste0(full_digits(abs(d)), if (mult) " % " else " ", if (d >= 0) "above" else "below", " the average")
+              }, character(1)))
+  rownames(sm) <- sn
+  colnames(sm)[1:2] <- paste0(colnames(sm)[1:2], if (mult) " (%)" else "")
+  print(sm, quote = FALSE, right = TRUE)
+  cat("  sum of the uncorrected = ", full_digits(sum(raw) * unit), "   sum of the corrected = ",
+      full_digits(sum(idx) * unit), "\n", sep = "")
+  
+  cat("\n  B) TREND LINE  (step 7)\n")
+  cat("     X = a + b * t  =  ", full_digits(res$a), signed_full_t(res$b), " * t\n", sep = "")
+  kv_t <- function(k, val, note) cat(sprintf("     %-4s = %-22s %s\n", k, full_digits(val), note))
+  kv_t("a", res$a, "intercept of the trend")
+  kv_t("b", res$b, paste0("slope: the trend ", if (res$b > 0) "grows" else "falls", " by this much each period"))
+  kv_t("r", res$r, "correlation of t and the deseasonalised series")
+  kv_t("R^2", res$r^2, "share of the deseasonalised series explained by the line")
+  
+  cat("\n  C) PER PERIOD, in the order of the steps  ('-' = not available: the moving average is lost)\n")
+  fmt <- function(z) ifelse(is.na(z), "-", vapply(z, full_digits, character(1)))
+  lab <- paste(L$year, sn[L$season])
+  Ev <- unname(idx[L$season])
+  blk1 <- cbind(X = fmt(v), `TC (1)` = fmt(tc), `E.A (2)` = fmt(ea), `E (4)` = fmt(Ev))
+  blk2 <- cbind(`A (5)` = fmt(ac), `X/E (6)` = fmt(des), `T (8)` = fmt(tr), `C (9)` = fmt(cyc))
+  rownames(blk1) <- rownames(blk2) <- lab
+  cat("\n     Original series and steps 1 to 4:\n"); print(blk1, quote = FALSE, right = TRUE)
+  cat("\n     Steps 5 to 9:\n"); print(blk2, quote = FALSE, right = TRUE)
+  cat("\n     Check ", if (mult) "T * E * C * A" else "T + E + C + A", " = X:\n", sep = "")
+  chk <- cbind(rebuilt = fmt(rebuilt), X = fmt(v)); rownames(chk) <- lab
+  print(chk, quote = FALSE, right = TRUE)
+  if (!is.null(res$forecast)) {
+    cat("\n  D) PREDICTION  (step 10)\n")
+    f <- res$forecast
+    pm <- cbind(t = f$t, trend = fmt(f$trend), index = fmt(f$seasonal_index), prediction = fmt(f$prediction))
+    rownames(pm) <- paste(f$year, f$season)
+    print(pm, quote = FALSE, right = TRUE)
+  }
+  cat("\n", strrep("=", 72), "\n", sep = "")
+  invisible(res)
+}
+
+# -----------------------------------------------------------------------------
+# seasonal_indices(ea, period = 4, model = "multiplicative", season_names = NULL)
+# -----------------------------------------------------------------------------
+# WHAT IT DOES : CASE: "Calculate the seasonal variation indices and the corrected
+#                seasonal indices of the following table E.A (= X / T.C)" and
+#                "interpret the results". Use it when the exercise GIVES you the
+#                table E.A (not the original series). It does steps 3 and 4 of
+#                the slides: the mean of each season (uncorrected indices, in %),
+#                their sum, the correction to 400 % and the interpretation.
+#                (If you have the series X itself, use time_series_steps().)
+# HOW TO TYPE THE TABLE (the easiest way): copy the numbers of the table ROW BY
+#                ROW, in quotes, and write "-" where the table has a dash. No
+#                matrix, no NA, no byrow:
+#                    seasonal_indices("- - 1.0778 0.9337
+#                                      1.1079 0.8764 1.1025 0.9246
+#                                      1.0906 0.8743 1.0932 0.9337
+#                                      1.1069 0.8932 1.0703 0.9573
+#                                      1.0559 0.8829 - -")
+#                You can also give a normal vector c(NA, NA, 1.0778, ...) or a matrix.
+# PARAMETERS   :
+#   ea           : the table E.A: a text with the numbers row by row (see above),
+#                  or a vector (row by row, NA or "-" for the dashes), or a matrix.
+#   period       : seasons per cycle = columns of the table. Default 4 (quarterly);
+#                  monthly = 12, four-month = 3 (ignored if ea is a matrix).
+#   model        : "multiplicative" (default, indices in %, they must add up to
+#                  period x 100) or "additive" (E+A table, they must add up to 0).
+#   season_names : (optional) names of the seasons, e.g. c("Spring","Summer",
+#                  "Autumn","Winter"). Default Q1..Q4 (or the column names).
+# RETURNS      : Invisibly, a list with `uncorrected` and `corrected` indices.
+# EXAMPLE      :
+#   seasonal_indices("- - 1.0778 0.9337
+#                     1.1079 0.8764 1.1025 0.9246
+#                     1.0906 0.8743 1.0932 0.9337
+#                     1.1069 0.8932 1.0703 0.9573
+#                     1.0559 0.8829 - -",
+#                    season_names = c("Spring","Summer","Autumn","Winter"))
+# -----------------------------------------------------------------------------
+seasonal_indices <- function(ea, period = 4, model = "multiplicative", season_names = NULL) {
+  model <- match.arg(model, c("multiplicative", "additive"))
+  mult <- model == "multiplicative"
+  if (is.matrix(ea) || is.data.frame(ea)) {
+    m <- as.matrix(ea)
+  } else {
+    if (is.character(ea)) {
+      txt <- paste(ea, collapse = " ")
+      txt <- iconv(txt, "UTF-8", "ASCII", sub = "-")              # long dashes (copied from a PDF) -> "-"
+      txt <- gsub(",(\\s|$)", " ", txt)                         # "1.0778, 0.9" -> separator
+      txt <- gsub("(?<=\\d),(?=\\d)", ".", txt, perl = TRUE)      # 1,0778 -> 1.0778
+      tok <- strsplit(trimws(txt), "[[:space:];]+")[[1]]
+      tok[grepl("^-+$", tok) | tok %in% c("NA", "na", "x", "X", "")] <- NA   # a dash = missing value
+      v <- suppressWarnings(as.numeric(tok))
+      if (any(is.na(v) & !is.na(tok))) stop("I could not read these values as numbers: ", paste(tok[is.na(v) & !is.na(tok)], collapse = ", "))
+    } else v <- as.numeric(ea)
+    if (length(v) %% period != 0)
+      stop("The table has ", length(v), " values, which does not fill whole rows of ", period,
+           " columns. Check the values or the `period` (columns of the table).")
+    m <- matrix(v, ncol = period, byrow = TRUE)
+  }
+  p <- ncol(m)
+  if (is.null(season_names)) season_names <- if (!is.null(colnames(m))) colnames(m) else default_season_names(p)
+  if (length(season_names) != p) stop("`season_names` must have ", p, " names.")
+  colnames(m) <- season_names
+  if (is.null(rownames(m))) rownames(m) <- paste0("year ", seq_len(nrow(m)))
+  unit <- if (mult) 100 else 1
+  old_width <- options(width = max(getOption("width"), 150)); on.exit(options(old_width), add = TRUE)
+  
+  raw <- colMeans(m, na.rm = TRUE)
+  idx <- if (mult) raw * p / sum(raw) else raw - mean(raw)
+  target <- if (mult) p * 100 else 0
+  tick <- function(z) paste(vapply(z, full_digits, character(1)), collapse = " + ")
+  
+  report_title(paste0("SEASONAL INDICES FROM THE TABLE ", if (mult) "E.A" else "E+A", "  (", model, ")"))
+  cat("  The table E.A  (X / T.C):\n"); show_table(m)
+  
+  cat("\n", strrep("=", 72), "\n E (uncorrected) = MEAN of ", if (mult) "E.A" else "E+A",
+      " in each season     [seasonal variation indices]\n", strrep("=", 72), "\n", sep = "")
+  cat("  WHAT WE DO : Average each season over the years: this eliminates the random component A.\n")
+  cat("  FORMULA    : I_season = mean of the values of that season\n")
+  for (k in seq_len(p)) {
+    v <- m[!is.na(m[, k]), k]
+    cat("  ", sprintf("%-10s", season_names[k]), " = (", tick(v), ") / ", length(v), " = ", full_digits(raw[k]),
+        if (mult) paste0("   =>  ", full_digits(raw[k] * 100), " %") else "", "\n", sep = "")
+  }
+  cat("  >>> ANSWER  E (uncorrected) =\n")
+  for (k in seq_len(p)) cat(sprintf("        %-10s %s%s\n", season_names[k], full_digits(raw[k]),
+                                    if (mult) paste0("   (", full_digits(raw[k] * 100), " %)") else ""))
+  cat("  Sum of the indices: ", full_digits(sum(raw) * unit), if (mult) " %" else "", "   (they should add up to ",
+      full_digits(target), if (mult) " %" else "", ")\n", sep = "")
+  if (abs(sum(raw) * unit - target) < 1e-9) {
+    cat("  -> They already add up exactly: the correction does not change them.\n")
+  } else cat("  -> They do NOT add up exactly, so they must be CORRECTED (normalised).\n")
+  
+  cat("\n", strrep("=", 72), "\n E' = ", if (mult) paste0(p * 100, " / (sum of E in %) * E") else "E - mean(E)",
+      "     [corrected / normalised indices]\n", strrep("=", 72), "\n", sep = "")
+  if (mult) {
+    cat("  FORMULA    : I' = ", p * 100, " / (sum of the indices in %) * I\n", sep = "")
+    cat("  CORRECTION FACTOR : ", p * 100, " / ", full_digits(sum(raw) * 100), " = ",
+        full_digits(p * 100 / (sum(raw) * 100)), "\n", sep = "")
+    for (k in seq_len(p)) cat("  ", sprintf("%-10s", season_names[k]), " = ", full_digits(p * 100 / (sum(raw) * 100)), " * ",
+                              full_digits(raw[k] * 100), " = ", full_digits(idx[k] * 100), " %\n", sep = "")
+  } else {
+    cat("  FORMULA    : I' = I - mean(I)      mean(I) = ", full_digits(mean(raw)), "\n", sep = "")
+    for (k in seq_len(p)) cat("  ", sprintf("%-10s", season_names[k]), " = ", full_digits(raw[k]), " - (", full_digits(mean(raw)), ") = ",
+                              full_digits(idx[k]), "\n", sep = "")
+  }
+  cat("  >>> ANSWER  E' (corrected seasonal indices) =\n")
+  for (k in seq_len(p)) cat(sprintf("        %-10s %s%s\n", season_names[k], full_digits(idx[k]),
+                                    if (mult) paste0("   (", full_digits(idx[k] * 100), " %)") else ""))
+  cat("  Sum of the corrected indices: ", full_digits(sum(idx) * unit), if (mult) " %" else "", "\n", sep = "")
+  cat("  NOTE: if the table E.A you typed is rounded (e.g. 4 decimals), the 3rd-4th decimal of these indices can\n",
+      "  differ a little from the exercise solution, which was computed with the unrounded table.\n", sep = "")
+  cat("\n  INTERPRETATION (what each season means compared with the annual average):\n")
+  for (k in seq_len(p)) {
+    if (mult) {
+      d <- idx[k] * 100 - 100
+      cat(sprintf("     %-10s %s %% %s than the annual average\n", season_names[k], full_digits(abs(d)), if (d >= 0) "HIGHER" else "LOWER"))
+    } else cat(sprintf("     %-10s %s %s the annual average\n", season_names[k], full_digits(abs(idx[k])), if (idx[k] >= 0) "ABOVE" else "BELOW"))
+  }
+  cat("\n", strrep("=", 72), "\n", sep = "")
+  invisible(list(uncorrected = raw, corrected = idx))
 }
 
 # -----------------------------------------------------------------------------
