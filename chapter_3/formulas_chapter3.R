@@ -101,7 +101,13 @@
 #       deflate(1000, 135, percent = TRUE)    # the same, typing the CPI as a percentage
 #       deflate(c(100,110,120), c(100,104,109), labels = 2020:2022)   # a whole series
 #  "The salary grew 50% and the CPI doubled: how much did it really grow?"
+#  "The CPI of 1998 with respect to 1990 is 135 %: real value in 1990 of 1000 of 1998, and in 1998 of 1000 of 1990"
+#       cpi_conversion(cpi = 135, amount = 1000, year = 1998, base = 1990)   # BOTH directions
 #       real_change(nominal_change = 50, cpi_change = 100)   # inputs in %
+#       real_salary(salary_pct = 50, cpi_pct = 100)          # THE EASIEST: the whole exercise
+#       real_salary(salary_pct = 50, cpi_pct = 100, years = 10)   # + average yearly change
+#       real_salary(salary = c(1000,1200,1500), cpi = c(100,110,130), labels = 1970:1972)  # a table
+#       (CPI "doubled" = 100, "tripled" = 200, "grew 30 %" = 30, "fell 10 %" = -10)
 #
 #  TYPICAL MISTAKES: write quarterly tables ROW BY ROW (byrow = TRUE) |
 #  use the right `period` (4 quarters, 12 months) | in deflate(), the CPI is
@@ -113,7 +119,7 @@
 #       moving_average, trend_line, decompose_series, time_series_components,
 #       time_series_steps, seasonal_indices,
 #       autocorrelation,
-#       index_numbers, simple_index, deflate, real_change
+#       index_numbers, simple_index, deflate, real_change, real_salary, cpi_conversion
 #  1. INDEX NUMBER PROPERTIES
 #       invert_index, chain_index
 # =============================================================================
@@ -1089,7 +1095,7 @@ seasonal_indices <- function(ea, period = 4, model = "multiplicative", season_na
 }
 
 # -----------------------------------------------------------------------------
-# autocorrelation(x, lag = NULL, threshold = 0.95, plot = TRUE)
+# autocorrelation(x, lag = NULL, threshold = 0.95, plot = TRUE, max_lag = NULL)
 # -----------------------------------------------------------------------------
 # WHAT IT DOES : CASE: "Determine if the time series has a cycle of period T"
 #                or "find the cycle of the series". Correlates the series X(t)
@@ -1097,9 +1103,10 @@ seasonal_indices <- function(ea, period = 4, model = "multiplicative", season_na
 #                r is close to 1, the series repeats itself every `lag`
 #                periods: there is a cycle of that period.
 #                - With `lag`: shows the table of pairs, r, and the verdict.
-#                - Without `lag`: tries every lag (1, 2, 3, ...), picks the smallest
-#                  one with r close to 1 (or the one with the highest r) and shows
-#                  it in EXACTLY the same format as above.
+#                - Without `lag`: tries the lags 1, 2, ..., max_lag, keeps the one with
+#                  the HIGHEST r and shows it in the same format as above (after a
+#                  small table with the r of every lag tested).
+#                - With several lags, e.g. lag = 2:5: tries only those and keeps the highest.
 # FORMULA (for reference — matches the slides' notation):
 #   r = correlation coefficient between (X_1..X_{N-lag}) and (X_{1+lag}..X_N)
 # PARAMETERS   :
@@ -1107,6 +1114,8 @@ seasonal_indices <- function(ea, period = 4, model = "multiplicative", season_na
 #   lag       : (optional) the period to test, e.g. 3. Leave empty to scan.
 #   threshold : r from which a cycle is declared (default 0.95, "r close to 1").
 #   plot      : FALSE to skip the plot.
+#   max_lag   : (optional) largest lag to try when `lag` is empty. Default: N / 2
+#               (rounded down), so every r uses at least half of the data.
 # RETURNS      : Invisibly, r (one lag) or a data.frame lag / pairs / r (scan).
 # WHAT IS THE LAG? : how many positions the series is shifted before comparing
 #                it with itself = the period of the cycle you want to test.
@@ -1127,7 +1136,16 @@ seasonal_indices <- function(ea, period = 4, model = "multiplicative", season_na
 #   x <- c(1.2, 1.4, 2.0, 1.23, 1.37, 2.07, 1.25, 1.47, 2.09)
 #   autocorrelation(x, lag = 3)     # r = 0.9936708...  -> cycle of period 3
 #   autocorrelation(x, lag = 2)     # r far from 1      -> NO cycle of period 2
-#   autocorrelation(x)              # tries all the lags (needs at least 7 data)
+#   autocorrelation(x)              # tries the lags 1..N/2 and keeps the HIGHEST r (here lag 3)
+#   autocorrelation(x, lag = 2:4)   # tries only the lags 2, 3 and 4 and keeps the highest r
+#   autocorrelation(x, max_lag = 6) # tries the lags 1..6 (default max is N/2 = 4 here)
+#   # What you see with autocorrelation(x) (a table of the lags tested, then the usual output):
+#   #   lag pairs                  r         best
+#   #     1     8 -0.381812081358112
+#   #     2     7 -0.541019836413653
+#   #     3     6   0.99367081338781 <- highest r
+#   #     4     5 -0.320450134225392
+#   #   -> r close to 1 for lag 3: the series HAS A CYCLE of period 3
 #   # 5 years of quarterly data (20 values), is there a yearly pattern?
 #   autocorrelation(sales, lag = 4)
 #   # 6 years of monthly data (72 values), is there a yearly pattern?
@@ -1135,20 +1153,27 @@ seasonal_indices <- function(ea, period = 4, model = "multiplicative", season_na
 # HOW TO READ r: close to 1 (>= 0.95 by default) -> cycle of that period.
 #                far from 1 (e.g. 0.3)           -> no cycle of that period.
 # -----------------------------------------------------------------------------
-autocorrelation <- function(x, lag = NULL, threshold = 0.95, plot = TRUE) {
+autocorrelation <- function(x, lag = NULL, threshold = 0.95, plot = TRUE, max_lag = NULL) {
   nm <- variable_label(deparse(substitute(x)), "X")
   x <- as.numeric(x); n <- length(x)
   r_at <- function(l) cor(x[1:(n - l)], x[(1 + l):n])
   scan_tab <- NULL
-  if (is.null(lag)) {
-    # No lag given: try every lag, keep the smallest one with r close to 1 (or the one with the
-    # highest r if none is close to 1) and show it in EXACTLY the same format as a given lag.
-    if (n < 7) stop("At least 7 data are needed to scan the lags; give a `lag` instead.")
-    lags <- 1:(n - 4)                      # at least 4 pairs per lag
+  if (is.null(lag) || length(lag) > 1) {
+    # No lag (or several lags) given: try them all and keep the one with the HIGHEST r.
+    # Then show that lag in EXACTLY the same format as a single given lag.
+    if (is.null(lag)) {
+      if (is.null(max_lag)) max_lag <- n %/% 2            # at least half of the data in every pair set
+      lags <- 1:min(max_lag, n - 3)
+    } else lags <- lag
+    if (n < 6 && is.null(lag)) stop("At least 6 data are needed to scan the lags; give a `lag` instead.")
+    lags <- lags[lags >= 1 & n - lags >= 3]
+    if (length(lags) == 0) stop("No valid lag to test (each lag needs at least 3 pairs).")
     rs <- vapply(lags, r_at, numeric(1))
     scan_tab <- data.frame(lag = lags, pairs = n - lags, r = rs)
-    hit <- which(rs >= threshold)
-    lag <- lags[if (length(hit) > 0) hit[1] else which.max(rs)]
+    lag <- lags[which.max(rs)]
+    report_section(paste0("LAGS TESTED (the highest r is kept): ", paste(lags, collapse = ", ")))
+    print(data.frame(lag = lags, pairs = n - lags, r = vapply(rs, full_digits, character(1)),
+                     best = ifelse(lags == lag, "<- highest r", "")), row.names = FALSE, right = TRUE)
   }
   if (lag < 1 || n - lag < 3) stop("The lag must be between 1 and ", n - 3, " (at least 3 pairs are needed).")
   r <- r_at(lag)
@@ -1440,4 +1465,192 @@ real_change <- function(nominal_change, cpi_change, percent = TRUE) {
     else if (ratio > 1) paste0("-> the purchasing power INCREASED by ", full_digits((ratio - 1) * 100), " %")
     else "-> the purchasing power did not change"))
   invisible(ratio)
+}
+
+# -----------------------------------------------------------------------------
+# real_salary(salary_pct = NULL, cpi_pct = NULL, years = NULL,
+#             salary = NULL, cpi = NULL, labels = NULL, base = 1)
+# -----------------------------------------------------------------------------
+# WHAT IT DOES : ONE CALL FOR THE WHOLE "salary vs CPI" EXERCISE: "the salary grew
+#                50 % and the CPI doubled: how much did it REALLY grow?", "what is
+#                the real salary of each year?", "did the purchasing power go up or
+#                down?". It gives the index of the salary, the index of the CPI, the
+#                real index, the real change in %, the real value in money of the
+#                base period, the average yearly change (if you give the years),
+#                the interpretation, and a final box with the answer.
+# THE EASIEST WAY (the exercise gives percentages):
+#   real_salary(salary_pct = 50, cpi_pct = 100)             # salary +50 %, CPI +100 % ("doubled")
+#   real_salary(salary_pct = 50, cpi_pct = 100, years = 10) # + the average yearly change
+# CPI "doubled" = +100 %, "tripled" = +200 %, "grew by 30 %" = +30, "fell by 10 %" = -10.
+# WITH A TABLE (the exercise gives the salary and the CPI of each year):
+#   real_salary(salary = c(1000, 1200, 1500), cpi = c(100, 110, 130), labels = 1970:1972)
+#   (cpi = the CPI of each year, any base: only its ratio to the base year matters)
+# PARAMETERS   :
+#   salary_pct : % change of the salary over the period (50 = grew 50 %, -10 = fell 10 %).
+#   cpi_pct    : % change of the CPI (prices) over the same period.
+#   years      : (optional) length of the period in years, for the average yearly change.
+#   salary     : (table mode) the salary of each period.
+#   cpi        : (table mode) the CPI of each period.
+#   labels     : (table mode, optional) the periods, e.g. 1970:1972.
+#   base       : (table mode) base period: its label (1970) if you use `labels`,
+#                otherwise its position. Default: the first one.
+# RETURNS      : Invisibly, a list (percentage mode: real_ratio, real_change_pct; table mode:
+#                a data.frame with the nominal and real values and indices).
+# EXAMPLES     :
+#   real_salary(salary_pct = 50, cpi_pct = 100)   # real change = -25 %: purchasing power DOWN
+#   real_salary(salary_pct = 80, cpi_pct = 40)    # real change = +28.57... %: UP
+#   real_salary(salary = c(1000, 1200, 1500), cpi = c(100, 110, 130), labels = 1970:1972)
+# -----------------------------------------------------------------------------
+real_salary <- function(salary_pct = NULL, cpi_pct = NULL, years = NULL,
+                        salary = NULL, cpi = NULL, labels = NULL, base = 1) {
+  if (!is.null(salary_pct) && !is.null(cpi_pct)) {
+    nom <- salary_pct / 100; inf <- cpi_pct / 100
+    ratio <- (1 + nom) / (1 + inf)
+    chg <- (ratio - 1) * 100
+    report_title("REAL SALARY: SALARY vs CPI (percentage changes)")
+    report_section("GENERAL DATA")
+    report_line("Change of the salary over the period (%)", salary_pct)
+    report_line("Change of the CPI (prices) over the period (%)", cpi_pct)
+    if (!is.null(years)) report_line("Length of the period (years)", years)
+    report_section("STEP BY STEP (taking 100 as the starting salary and the starting CPI)")
+    cat("  1. Index of the salary  = 1 + ", full_digits(salary_pct), " / 100 = ", full_digits(1 + nom),
+        "   (nominal salary: 100 -> ", full_digits(100 * (1 + nom)), ")\n", sep = "")
+    cat("  2. Index of the CPI     = 1 + ", full_digits(cpi_pct), " / 100 = ", full_digits(1 + inf),
+        "   (prices: 100 -> ", full_digits(100 * (1 + inf)), ")\n", sep = "")
+    cat("  3. Real index = salary index / CPI index = ", full_digits(1 + nom), " / ", full_digits(1 + inf),
+        " = ", full_digits(ratio), "   (= ", full_digits(ratio * 100), " %)\n", sep = "")
+    cat("  4. Real change (%) = (real index - 1) * 100 = (", full_digits(ratio), " - 1) * 100 = ", full_digits(chg), " %\n", sep = "")
+    cat("  5. Real value of the new salary in money of the start: 100 * ", full_digits(ratio), " = ", full_digits(100 * ratio), "\n", sep = "")
+    yr <- NULL
+    if (!is.null(years)) {
+      yr <- list(nominal = ((1 + nom)^(1 / years) - 1) * 100, cpi = ((1 + inf)^(1 / years) - 1) * 100,
+                 real = (ratio^(1 / years) - 1) * 100)
+      cat("  6. Average yearly change (compound): salary ", full_digits(yr$nominal), " %, CPI ", full_digits(yr$cpi),
+          " %, REAL ", full_digits(yr$real), " %\n", sep = "")
+    }
+    verdict <- if (ratio < 1) paste0("the purchasing power DECREASED by ", full_digits((1 - ratio) * 100), " %")
+    else if (ratio > 1) paste0("the purchasing power INCREASED by ", full_digits((ratio - 1) * 100), " %")
+    else "the purchasing power did not change"
+    cat("\n  ->", verdict, "\n")
+    final_box("REAL SALARY: ANSWER", c(
+      box_line("Salary index", 1 + nom),
+      box_line("CPI index", 1 + inf),
+      box_line("Real index", ratio),
+      box_line("REAL CHANGE (%)", chg),
+      box_line("Real value of 100 (money of the start)", 100 * ratio),
+      if (!is.null(yr)) box_line("Average yearly REAL change (%)", yr$real),
+      paste0("-> ", verdict)))
+    return(invisible(list(real_ratio = ratio, real_change_pct = chg, yearly = yr)))
+  }
+  if (is.null(salary) || is.null(cpi))
+    stop("Give salary_pct and cpi_pct (e.g. real_salary(50, 100)), or the tables salary = ... and cpi = ...")
+  n <- length(salary)
+  if (length(cpi) != n) stop("`salary` and `cpi` must have the same length.")
+  if (is.null(labels)) labels <- seq_len(n)
+  if (length(labels) != n) stop("`labels` must have one entry per period.")
+  pos <- if (base %in% labels) which(labels == base)[1] else base
+  if (is.na(pos) || pos < 1 || pos > n) stop("The base period is not in the data.")
+  cpi_ratio <- cpi / cpi[pos]
+  real <- salary / cpi_ratio
+  nom_idx <- salary / salary[pos] * 100
+  real_idx <- real / real[pos] * 100
+  tab <- data.frame(period = labels, salary = salary, cpi = cpi, cpi_ratio = cpi_ratio,
+                    real_salary = real, nominal_index = nom_idx, real_index = real_idx,
+                    real_change_pct = real_idx - 100)
+  report_title(paste0("REAL SALARY: SALARY vs CPI (base period = ", labels[pos], ")"))
+  report_section("GENERAL DATA")
+  report_line("Number of periods", n)
+  report_line("Base period", labels[pos])
+  cat("  FORMULAS: CPI ratio = CPI(t) / CPI(base);  real salary = salary(t) / CPI ratio;\n",
+      "            real index = real salary(t) / real salary(base) * 100\n", sep = "")
+  report_section("STEP BY STEP")
+  for (i in seq_len(n)) {
+    cat(sprintf("\n  %s:  CPI ratio = %s / %s = %s\n", labels[i], full_digits(cpi[i]), full_digits(cpi[pos]), full_digits(cpi_ratio[i])))
+    cat(sprintf("        real salary = %s / %s = %s\n", full_digits(salary[i]), full_digits(cpi_ratio[i]), full_digits(real[i])))
+    cat(sprintf("        real index = %s / %s * 100 = %s %%   (nominal index = %s %%)\n", full_digits(real[i]), full_digits(real[pos]),
+                full_digits(real_idx[i]), full_digits(nom_idx[i])))
+  }
+  report_section("SUMMARY TABLE")
+  print(tab, row.names = FALSE)
+  last <- n
+  chg <- real_idx[last] - 100
+  verdict <- if (chg < 0) paste0("the purchasing power DECREASED by ", full_digits(-chg), " % between ", labels[pos], " and ", labels[last])
+  else if (chg > 0) paste0("the purchasing power INCREASED by ", full_digits(chg), " % between ", labels[pos], " and ", labels[last])
+  else "the purchasing power did not change"
+  cat("\n  ->", verdict, "\n")
+  final_box(paste0("REAL SALARY: ANSWER (base ", labels[pos], ")"), c(
+    vapply(seq_len(n), function(i) paste0(labels[i], ":  real salary = ", full_digits(real[i]), "   real index = ", full_digits(real_idx[i]), " %"), character(1)),
+    "",
+    box_line(paste0("REAL CHANGE (%) from ", labels[pos], " to ", labels[last]), chg),
+    paste0("-> ", verdict)))
+  invisible(tab)
+}
+
+# -----------------------------------------------------------------------------
+# cpi_conversion(cpi, amount, year = "t", base = "base", amount_base = NULL,
+#                cpi_is_ratio = FALSE)
+# -----------------------------------------------------------------------------
+# WHAT IT DOES : ONE CALL FOR THE EXERCISE "Knowing that the CPI of the year 1998
+#                with respect to 1990 is 135 %: (1) the real value in 1990 of a
+#                product that cost 1000 in 1998; (2) the real value in 1998 of a
+#                product that cost 1000 in 1990". It does BOTH directions, step
+#                by step: the CPI, the inverse CPI, the real value in the base
+#                year (divide by the CPI) and the real value in the later year
+#                (multiply by the CPI = divide by the inverse CPI).
+# THE EASIEST WAY:
+#   cpi_conversion(cpi = 135, amount = 1000, year = 1998, base = 1990)
+# PARAMETERS   :
+#   cpi          : the CPI of the later year with respect to the base year, as the
+#                  exercise gives it: 135 for "135 %". (If you have it as a ratio, 1.35,
+#                  use cpi_is_ratio = TRUE.)
+#   amount       : the price / amount in the LATER year (1998) for part (1)
+#                  and, if `amount_base` is empty, also the price in the BASE year (1990)
+#                  for part (2) (in the exercise both are 1000).
+#   year         : the later year (only the label for the output), e.g. 1998.
+#   base         : the base year (only the label), e.g. 1990.
+#   amount_base  : (optional) the price in the BASE year for part (2) when it is not
+#                  the same number as `amount`.
+#   cpi_is_ratio : TRUE if you typed the CPI as a ratio (1.35) and not as a % (135).
+# RETURNS      : Invisibly, a list with cpi, inverse_cpi, real_in_base and real_in_year.
+# EXAMPLES     :
+#   cpi_conversion(cpi = 135, amount = 1000, year = 1998, base = 1990)
+#       # (1) 1000 of 1998 are 740.74... of 1990   (2) 1000 of 1990 are 1350 of 1998
+#   cpi_conversion(cpi = 135, amount = 1000, amount_base = 2500, year = 1998, base = 1990)
+# -----------------------------------------------------------------------------
+cpi_conversion <- function(cpi, amount, year = "t", base = "base", amount_base = NULL, cpi_is_ratio = FALSE) {
+  ratio <- if (cpi_is_ratio) cpi else cpi / 100
+  if (is.null(amount_base)) amount_base <- amount
+  inv <- 1 / ratio
+  real_base <- amount / ratio                 # (1) value of the year-t amount in money of the base year
+  real_year <- amount_base * ratio            # (2) value of the base-year amount in money of year t
+  report_title(paste0("CPI CONVERSION: ", year, " <-> ", base))
+  report_section("GENERAL DATA")
+  report_line(paste0("CPI of ", year, " with respect to ", base, " (%)"), ratio * 100)
+  report_line(paste0("Amount in ", year), amount)
+  report_line(paste0("Amount in ", base), amount_base)
+  cat("  RULE: to go from ", year, " back to ", base, " DIVIDE by the CPI; to go from ", base, " to ", year,
+      " MULTIPLY by the CPI.\n", sep = "")
+  report_section(paste0("STEP 1: the CPI as a ratio and its inverse"))
+  cat("  CPI(", year, "/", base, ") = ", full_digits(ratio * 100), " / 100 = ", full_digits(ratio), "\n", sep = "")
+  cat("  INVERSE: CPI(", base, "/", year, ") = 1 / ", full_digits(ratio), " = ", full_digits(inv),
+      "   (= ", full_digits(inv * 100), " %)\n", sep = "")
+  cat("  Prices ", if (ratio >= 1) "ROSE" else "FELL", " ", full_digits(abs(ratio - 1) * 100), " % between ", base, " and ", year, ".\n", sep = "")
+  report_section(paste0("STEP 2  (1): real value in ", base, " of ", full_digits(amount), " of ", year))
+  cat("  FORMULA : real value in ", base, " = amount in ", year, " / CPI(", year, "/", base, ")\n", sep = "")
+  cat("  NUMBERS : ", full_digits(amount), " / ", full_digits(ratio), " = ", full_digits(real_base), "\n", sep = "")
+  cat("  -> ", full_digits(amount), " of ", year, " are worth ", full_digits(real_base), " in money of ", base,
+      "  (", if (real_base < amount) "less" else "more", ": prices ", if (ratio >= 1) "rose" else "fell", ")\n", sep = "")
+  report_section(paste0("STEP 3  (2): real value in ", year, " of ", full_digits(amount_base), " of ", base))
+  cat("  FORMULA : real value in ", year, " = amount in ", base, " / CPI(", base, "/", year, ") = amount in ", base, " * CPI(", year, "/", base, ")\n", sep = "")
+  cat("  NUMBERS : ", full_digits(amount_base), " / ", full_digits(inv), " = ", full_digits(amount_base), " * ", full_digits(ratio),
+      " = ", full_digits(real_year), "\n", sep = "")
+  cat("  -> ", full_digits(amount_base), " of ", base, " are worth ", full_digits(real_year), " in money of ", year,
+      "  (", if (real_year > amount_base) "more" else "less", ": prices ", if (ratio >= 1) "rose" else "fell", ")\n", sep = "")
+  final_box("CPI CONVERSION: ANSWER", c(
+    box_line(paste0("CPI(", year, "/", base, ")"), ratio),
+    box_line(paste0("Inverse CPI(", base, "/", year, ")"), inv),
+    "",
+    paste0("(1) ", full_digits(amount), " of ", year, " = ", full_digits(real_base), " in ", base),
+    paste0("(2) ", full_digits(amount_base), " of ", base, " = ", full_digits(real_year), " in ", year)))
+  invisible(list(cpi = ratio, inverse_cpi = inv, real_in_base = real_base, real_in_year = real_year))
 }
