@@ -83,6 +83,9 @@
 #  "Does the series have a cycle of period 3?" / "find the cycle"
 #       autocorrelation(x, lag = 3)           # r between X(t) and X(t+3)
 #       autocorrelation(x)                    # tries all the lags and finds the best
+#       WHICH lag?  = the period of the cycle they ask about:
+#         "period 3" -> 3 | quarterly yearly pattern -> 4 | monthly yearly -> 12
+#         semester -> 2 | daily, weekly pattern -> 7 | hourly, daily pattern -> 24
 #
 #  INDEX NUMBERS
 #  -------------
@@ -805,15 +808,17 @@ time_series_steps <- function(x, period = NULL, start = NULL, model = "multiplic
   vt <- mean(tt^2) - mean(tt)^2; cvt <- mean(tt * des) - mean(tt) * mean(des)
   cat("  NUMBERS    : mean(t) = ", full_digits(mean(tt)), ",  mean(X/E) = ", full_digits(mean(des)),
       ",  Var(t) = ", full_digits(vt), ",  Cov(t, X/E) = ", full_digits(cvt), "\n", sep = "")
-  cat("               b = ", full_digits(cvt), " / ", full_digits(vt), " = ", full_digits(res$b), "\n", sep = "")
-  cat("               a = ", full_digits(mean(des)), " - (", full_digits(res$b), ") * ", full_digits(mean(tt)),
+  cat("               SLOPE b = ", full_digits(cvt), " / ", full_digits(vt), " = ", full_digits(res$b), "\n", sep = "")
+  cat("               INTERCEPT a = ", full_digits(mean(des)), " - (", full_digits(res$b), ") * ", full_digits(mean(tt)),
       " = ", full_digits(res$a), "\n", sep = "")
   answer_box(c(paste0(">>> ANSWER  STEP 7:  REGRESSION LINE"),
                "",
                paste0("X", op, "E' = ", full_digits(res$a), signed_full_t(res$b), " * t"),
                "",
-               paste0("a = ", full_digits(res$a)),
-               paste0("b = ", full_digits(res$b))))
+               paste0("INTERCEPT  a = ", full_digits(res$a), "   (value of the line at t = 0)"),
+               paste0("SLOPE      b = ", full_digits(res$b), "   (change per period)")))
+  report_line("INTERCEPT  a", res$a)
+  report_line("SLOPE      b", res$b)
   report_line("r (correlation of t and X/E)", res$r)
   report_line("R^2 = r^2", res$r^2)
   describe_trend(res$a, res$b, n, res$r^2)
@@ -874,7 +879,7 @@ time_series_steps <- function(x, period = NULL, start = NULL, model = "multiplic
   cat("\n  B) TREND LINE  (step 7)\n")
   cat("     X = a + b * t  =  ", full_digits(res$a), signed_full_t(res$b), " * t\n", sep = "")
   kv_t <- function(k, val, note) cat(sprintf("     %-4s = %-22s %s\n", k, full_digits(val), note))
-  kv_t("a", res$a, "intercept of the trend")
+  kv_t("a", res$a, "INTERCEPT of the trend line (its value at t = 0)")
   kv_t("b", res$b, paste0("slope: the trend ", if (res$b > 0) "grows" else "falls", " by this much each period"))
   kv_t("r", res$r, "correlation of t and the deseasonalised series")
   kv_t("R^2", res$r^2, "share of the deseasonalised series explained by the line")
@@ -1043,10 +1048,32 @@ seasonal_indices <- function(ea, period = 4, model = "multiplicative", season_na
 #   threshold : r from which a cycle is declared (default 0.95, "r close to 1").
 #   plot      : FALSE to skip the plot.
 # RETURNS      : Invisibly, r (one lag) or a data.frame lag / pairs / r (scan).
-# EXAMPLE      :
+# WHAT IS THE LAG? : how many positions the series is shifted before comparing
+#                it with itself = the period of the cycle you want to test.
+#                lag = 3  ->  pairs (X1,X4) (X2,X5) (X3,X6) ...
+# WHICH LAG DO I USE? (look at what the exercise says):
+#   "cycle of period 3" / "frequency 3" / "shifted 3 periods" ....... lag = 3
+#   "r between X(t) and X(t+T)" ...................................... lag = T
+#   quarterly data, "is there a yearly pattern?" ..................... lag = 4
+#   monthly data,   "is there a yearly pattern?" ..................... lag = 12
+#   four-month data (3 per year) ..................................... lag = 3
+#   semester data (2 per year) ....................................... lag = 2
+#   daily data,  "is there a weekly pattern?" ........................ lag = 7
+#   hourly data, "is there a daily pattern?" ......................... lag = 24
+#   "which is the period of the cycle?" (not given) .................. no lag
+#                                  (or try several lags and keep the r nearest 1)
+#   "is it 3 or 4?" .................. run lag = 3 and lag = 4, the higher r wins
+# EXAMPLES     :
 #   x <- c(1.2, 1.4, 2.0, 1.23, 1.37, 2.07, 1.25, 1.47, 2.09)
 #   autocorrelation(x, lag = 3)     # r = 0.9936708...  -> cycle of period 3
+#   autocorrelation(x, lag = 2)     # r far from 1      -> NO cycle of period 2
 #   autocorrelation(x)              # tries all the lags (needs at least 7 data)
+#   # 5 years of quarterly data (20 values), is there a yearly pattern?
+#   autocorrelation(sales, lag = 4)
+#   # 6 years of monthly data (72 values), is there a yearly pattern?
+#   autocorrelation(sales, lag = 12)
+# HOW TO READ r: close to 1 (>= 0.95 by default) -> cycle of that period.
+#                far from 1 (e.g. 0.3)           -> no cycle of that period.
 # -----------------------------------------------------------------------------
 autocorrelation <- function(x, lag = NULL, threshold = 0.95, plot = TRUE) {
   nm <- variable_label(deparse(substitute(x)), "X")
@@ -1165,13 +1192,41 @@ index_numbers <- function(values, base = 1, labels = NULL, name = NULL, plot = T
   pos <- if (!is.null(labels) && base %in% labels) which(labels == base)[1] else base
   if (is.na(pos) || pos < 1 || pos > n) stop("The base period is not in the data.")
   idx <- values / values[pos]
-  report_title(paste0("INDEX NUMBERS:  ", nm, "  (base period = ", labels[pos], ")"))
-  report_line("Value of the base period", values[pos])
+  b <- labels[pos]
+  report_title(paste0("INDEX NUMBERS:  ", nm, "  (base period = ", b, ")"))
+  
+  report_section("GENERAL DATA")
+  report_line("Variable", nm)
+  report_line("Base period (t0)", b)
+  report_line(paste0("Value in the base period, X(", b, ")"), values[pos])
+  report_line("Number of periods", n)
+  cat("\n  FORMULA:  I(t/", b, ") = X(t) / X(", b, ")     variation (%) = (I - 1) * 100\n", sep = "")
+  
+  report_section(paste0("STEP BY STEP: one index per period, base ", b))
+  for (i in seq_len(n)) {
+    cat(sprintf("\n  I(%s/%s) = X(%s) / X(%s) = %s / %s\n", labels[i], b, labels[i], b,
+                full_digits(values[i]), full_digits(values[pos])))
+    cat(sprintf("           = %s   (= %s %%)\n", full_digits(idx[i]), full_digits(idx[i] * 100)))
+    if (i == pos) cat("           (base period: its index is always 1 = 100 %)\n")
+    else cat(sprintf("           variation = (%s - 1) * 100 = %s %%\n", full_digits(idx[i]), full_digits((idx[i] - 1) * 100)))
+  }
+  
+  report_section("SUMMARY TABLE")
   tab <- data.frame(period = labels, value = values, index = idx,
                     percentage = idx * 100, variation_percent = (idx - 1) * 100)
   print(tab, row.names = FALSE)
-  cat("  (index = value / value of the base period; the base period has index 1 = 100 %;\n",
-      "   variation = (index - 1) * 100 = percentage of increase (+) or decrease (-))\n", sep = "")
+  
+  ans <- character(0)
+  for (i in seq_len(n)) {
+    d <- (idx[i] - 1) * 100
+    what <- if (i == pos) "base period"
+    else if (d > 0) paste0(full_digits(d), " % MORE than in ", b)
+    else if (d < 0) paste0(full_digits(-d), " % LESS than in ", b)
+    else paste0("same as in ", b)
+    ans <- c(ans, sprintf("I(%s/%s) = %s = %s %%  -> %s", labels[i], b, full_digits(idx[i]), full_digits(idx[i] * 100), what))
+  }
+  cat("\n  >>> ANSWER: ALL THE ELEMENTARY INDICES WITH BASE ", b, "\n", sep = "")
+  answer_box(ans)
   if (plot) {
     barplot(idx * 100, names.arg = labels, col = ifelse(seq_len(n) == pos, "firebrick", "steelblue"),
             ylab = "index (%)", main = paste0("Index of ", nm, ", base ", labels[pos]))
