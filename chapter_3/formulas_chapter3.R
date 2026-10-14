@@ -128,6 +128,18 @@ if (!exists("report_title") || !exists("full_digits")) {
          "and only then source this Chapter 3 file.")
   }
 }
+
+# Box helpers (they live in formulas_chapter1.R; defined here too so this file never fails
+# if an older Chapter 1 file is loaded).
+if (!exists("answer_box")) answer_box <- function(lines) {
+  w <- max(nchar(lines)) + 4
+  bar <- strrep("*", w)
+  cat("\n  ", bar, "\n", sep = "")
+  for (l in lines) cat("  * ", formatC(l, width = -(w - 4), flag = "-"), " *\n", sep = "")
+  cat("  ", bar, "\n\n", sep = "")
+}
+if (!exists("box_line")) box_line <- function(label, value) paste0(label, " = ", paste(full_digits(value), collapse = ", "))
+if (!exists("final_box")) final_box <- function(title, lines) answer_box(c(paste0(">>> ", title), "", lines))
 options(digits = 15)
 
 
@@ -187,13 +199,22 @@ as_table <- function(v, L) {
 
 show_table <- function(m) print(m, na.print = "-")
 
-# INTERNAL: prints the final answer of a step inside a box so it stands out.
-answer_box <- function(lines) {
-  w <- max(nchar(lines)) + 4
-  bar <- strrep("*", w)
-  cat("\n  ", bar, "\n", sep = "")
-  for (l in lines) cat("  * ", formatC(l, width = -(w - 4), flag = "-"), " *\n", sep = "")
-  cat("  ", bar, "\n\n", sep = "")
+# INTERNAL helpers to build the lines of the final boxes (answer_box / final_box / box_line
+# live in formulas_chapter1.R).
+box_trend <- function(a, b, r2 = NA, nm = "X", var = "t") c(
+  paste0(nm, " = ", full_digits(a), signed_full_t(b), " * ", var),
+  box_line("INTERCEPT a", a),
+  box_line("SLOPE b", b),
+  if (!is.na(r2)) box_line("R^2", r2),
+  paste0("TREND: ", if (abs(b) < 1e-12) "FLAT" else if (b > 0) "GOES UP" else "GOES DOWN"))
+box_seasons <- function(season_names, idx, mult, what = "E'") {
+  unit <- if (mult) 100 else 1
+  vapply(seq_along(idx), function(k) paste0(what, " ", season_names[k], " = ", full_digits(unname(idx[k]) * unit), if (mult) " %" else ""), character(1))
+}
+box_forecast <- function(f) {
+  if (is.null(f)) return(NULL)
+  c("", "PREDICTION:", vapply(seq_len(nrow(f)), function(i)
+    paste0("  ", f$year[i], " ", f$season[i], " (t = ", f$t[i], ") = ", full_digits(f$prediction[i])), character(1)))
 }
 
 # INTERNAL: says in plain words if a trend line goes UP, DOWN or is FLAT, how much it
@@ -273,6 +294,13 @@ moving_average <- function(x, k, labels = NULL, name = NULL, plot = TRUE) {
   report_section("How the first value was computed")
   cat("  (", paste(terms, collapse = " + "), ") / ", k, " = ", full_digits(ma[first]),
       "   -> assigned to period ", labels[first], "\n", sep = "")
+  ok_ma <- which(!is.na(ma))
+  shown <- head(ok_ma, 24)
+  final_box(paste0("MOVING AVERAGE OF ORDER ", k, ":  ", nm), c(
+    vapply(shown, function(i) paste0("MA(", labels[i], ") = ", full_digits(ma[i])), character(1)),
+    if (length(ok_ma) > length(shown)) paste0("... and ", length(ok_ma) - length(shown), " more (all of them are in the table above)"),
+    "",
+    paste0("Periods lost at each end: ", k %/% 2)))
   if (plot) {
     plot(seq_len(n), x, type = "b", pch = 19, col = "steelblue", xaxt = "n",
          xlab = "period", ylab = nm, main = paste0("Moving average of order ", k))
@@ -346,6 +374,11 @@ trend_line <- function(x, labels = NULL, forecast = 0, name = NULL, plot = TRUE)
     report_section("Prediction with the trend line")
     print(fc, row.names = FALSE)
   }
+  final_box(paste0("TREND LINE:  ", nm), c(
+    box_trend(a, b, r^2, nm, "t"),
+    box_line("r", r),
+    box_line("MSE", mse),
+    if (!is.null(fc)) c("", "PREDICTION:", paste0("  ", fc$period, " (t = ", fc$t, ") = ", vapply(fc$prediction, full_digits, character(1))))))
   if (plot) {
     tt <- c(t, if (!is.null(fc)) fc$t)
     plot(t, x, type = "b", pch = 19, col = "steelblue", xlim = range(tt),
@@ -519,6 +552,12 @@ decompose_series <- function(x, period = NULL, start = NULL, model = "multiplica
     print(fc, row.names = FALSE)
   }
   
+  final_box(paste0("FINAL RESULTS (", model, "):  ", nm), c(
+    "CORRECTED SEASONAL INDICES:", box_seasons(L$season_names, idx, mult),
+    "",
+    "TRUE TREND (regression line of the deseasonalised series):",
+    box_trend(a, b, r^2, "T", "t"),
+    box_forecast(fc)))
   if (plot) {
     op <- par(mfrow = c(2, 2)); on.exit(par(op), add = TRUE)
     plot(t, v, type = "l", col = "steelblue", xlab = "t", ylab = nm, main = "Series and trend-cycle")
@@ -626,6 +665,14 @@ time_series_components <- function(x, period = NULL, start = NULL, model = "mult
     print(pm, quote = FALSE, right = TRUE)
   }
   
+  final_box(paste0("COMPONENTS ", if (mult) "T . E . C . A" else "T + E + C + A", ":  ", nm), c(
+    "T  TREND:", box_trend(res$a, res$b, res$r^2, "T", "t"),
+    "",
+    "E  SEASONAL INDICES (corrected):", box_seasons(L$season_names, res$indices, mult, "E"),
+    "",
+    paste0("C  CYCLE:  C = ", if (mult) "TC / T" else "TC - T", "   (see the table of each period)"),
+    paste0("A  RANDOM: A = ", if (mult) "X / (T * E * C)" else "X - T - E - C", "   (see the table of each period)"),
+    box_forecast(res$forecast)))
   if (plot) {
     xr <- c(1, n + max(forecast, 0))
     plot(out$t, out$X, type = "b", pch = 19, col = "steelblue", xlim = xr, xlab = "t", ylab = nm,
@@ -904,6 +951,12 @@ time_series_steps <- function(x, period = NULL, start = NULL, model = "multiplic
     print(pm, quote = FALSE, right = TRUE)
   }
   cat("\n", strrep("=", 72), "\n", sep = "")
+  final_box(paste0("FINAL ANSWER (", model, "):  ", nm), c(
+    paste0("STEP 4  Corrected seasonal indices E':"), box_seasons(sn, idx, mult),
+    "",
+    "STEP 7/8  Trend line (regression of the deseasonalised series):",
+    box_trend(res$a, res$b, res$r^2, "T", "t"),
+    box_forecast(res$forecast)))
   invisible(res)
 }
 
@@ -1026,6 +1079,12 @@ seasonal_indices <- function(ea, period = 4, model = "multiplicative", season_na
     } else cat(sprintf("     %-10s %s %s the annual average\n", season_names[k], full_digits(abs(idx[k])), if (idx[k] >= 0) "ABOVE" else "BELOW"))
   }
   cat("\n", strrep("=", 72), "\n", sep = "")
+  final_box(paste0("SEASONAL INDICES (", model, ")"), c(
+    "UNCORRECTED (mean of each season):", box_seasons(season_names, raw, mult, "I"),
+    paste0("  sum = ", full_digits(sum(raw) * unit), if (mult) " %" else ""),
+    "",
+    "CORRECTED (normalised):", box_seasons(season_names, idx, mult, "I'"),
+    paste0("  sum = ", full_digits(sum(idx) * unit), if (mult) " %" else "")))
   invisible(list(uncorrected = raw, corrected = idx))
 }
 
@@ -1038,8 +1097,9 @@ seasonal_indices <- function(ea, period = 4, model = "multiplicative", season_na
 #                r is close to 1, the series repeats itself every `lag`
 #                periods: there is a cycle of that period.
 #                - With `lag`: shows the table of pairs, r, and the verdict.
-#                - Without `lag`: tries every lag (1, 2, 3, ...) and tells you
-#                  the best one.
+#                - Without `lag`: tries every lag (1, 2, 3, ...), picks the smallest
+#                  one with r close to 1 (or the one with the highest r) and shows
+#                  it in EXACTLY the same format as above.
 # FORMULA (for reference — matches the slides' notation):
 #   r = correlation coefficient between (X_1..X_{N-lag}) and (X_{1+lag}..X_N)
 # PARAMETERS   :
@@ -1079,53 +1139,41 @@ autocorrelation <- function(x, lag = NULL, threshold = 0.95, plot = TRUE) {
   nm <- variable_label(deparse(substitute(x)), "X")
   x <- as.numeric(x); n <- length(x)
   r_at <- function(l) cor(x[1:(n - l)], x[(1 + l):n])
-  if (!is.null(lag)) {
-    if (lag < 1 || n - lag < 3) stop("The lag must be between 1 and ", n - 3, " (at least 3 pairs are needed).")
-    r <- r_at(lag)
-    report_title(paste0("AUTOCORRELATION WITH LAG ", lag, ":  ", nm))
-    report_section(paste0("Series X(t) and the same series shifted ", lag, " periods X(t+", lag, ")"))
-    pair_tab <- rbind(`X(t)` = x, `X(t-lag)` = c(rep(NA, lag), x[1:(n - lag)]))
-    rownames(pair_tab)[2] <- paste0("X(t-", lag, ")")
-    colnames(pair_tab) <- paste0("t=", 1:n)
-    show_table(pair_tab)
-    report_line("Number of pairs used", n - lag)
-    report_line(paste0("r = correlation of X(t) and X(t-", lag, ")"), r)
-    cat("  ->", if (r >= threshold) paste0("r is close to 1: the series HAS A CYCLE of period ", lag)
-        else paste0("r is not close to 1: there is NO clear cycle of period ", lag), "\n")
-    if (plot) {
-      plot(x[1:(n - lag)], x[(1 + lag):n], pch = 19, col = "steelblue",
-           xlab = "X(t)", ylab = paste0("X(t+", lag, ")"), main = paste0("Autocorrelation, lag ", lag, ",  r = ", signif(r, 6)))
-      abline(lm(x[(1 + lag):n] ~ x[1:(n - lag)]), col = "firebrick", lwd = 2)
-    }
-    return(invisible(r))
+  scan_tab <- NULL
+  if (is.null(lag)) {
+    # No lag given: try every lag, keep the smallest one with r close to 1 (or the one with the
+    # highest r if none is close to 1) and show it in EXACTLY the same format as a given lag.
+    if (n < 7) stop("At least 7 data are needed to scan the lags; give a `lag` instead.")
+    lags <- 1:(n - 4)                      # at least 4 pairs per lag
+    rs <- vapply(lags, r_at, numeric(1))
+    scan_tab <- data.frame(lag = lags, pairs = n - lags, r = rs)
+    hit <- which(rs >= threshold)
+    lag <- lags[if (length(hit) > 0) hit[1] else which.max(rs)]
   }
-  if (n < 7) stop("At least 7 data are needed to scan the lags; give a `lag` instead.")
-  lags <- 1:(n - 4)                      # at least 4 pairs per lag
-  rs <- vapply(lags, r_at, numeric(1))
-  report_title(paste0("AUTOCORRELATION FOR EVERY LAG:  ", nm))
-  tab <- data.frame(lag = lags, pairs = n - lags, r = rs,
-                    cycle = ifelse(rs >= threshold, "<- r close to 1", ""))
-  print(tab, row.names = FALSE)
-  hit <- which(rs >= threshold)
-  report_section("Conclusion")
-  if (length(hit) > 0) {
-    best <- hit[1]
-    report_line("Smallest lag with r close to 1 (the period of the cycle)", lags[best])
-    report_line("its r", rs[best])
-    cat("  -> the series HAS A CYCLE of period ", lags[best],
-        " (multiples of it, such as ", 2 * lags[best], ", also correlate)\n", sep = "")
-  } else {
-    best <- which.max(rs)
-    report_line("Lag with the highest r", lags[best])
-    report_line("its r", rs[best])
-    cat("  -> no lag has r close to 1: NO clear cycle\n")
-  }
+  if (lag < 1 || n - lag < 3) stop("The lag must be between 1 and ", n - 3, " (at least 3 pairs are needed).")
+  r <- r_at(lag)
+  report_title(paste0("AUTOCORRELATION WITH LAG ", lag, ":  ", nm))
+  report_section(paste0("Series X(t) and the same series shifted ", lag, " periods X(t+", lag, ")"))
+  # Same table as the slides: columns t = 1 .. N + lag, the shifted series starts `lag` columns later.
+  pair_tab <- rbind(c(x, rep(NA, lag)), c(rep(NA, lag), x))
+  rownames(pair_tab) <- c("X(t)", paste0("X(t+", lag, ")"))
+  colnames(pair_tab) <- paste0("t=", seq_len(n + lag))
+  show_table(pair_tab)
+  report_line("Number of pairs used", n - lag)
+  report_line(paste0("r = correlation of X(t) and X(t+", lag, ")"), r)
+  cat("  ->", if (r >= threshold) paste0("r is close to 1: the series HAS A CYCLE of period ", lag)
+      else paste0("r is not close to 1: there is NO clear cycle of period ", lag), "\n")
+  final_box(paste0("AUTOCORRELATION, LAG ", lag), c(
+    box_line(paste0("r (X(t) and X(t+", lag, "))"), r),
+    paste0("Pairs used = ", n - lag),
+    if (r >= threshold) paste0("CONCLUSION: r is close to 1 -> there IS a cycle of period ", lag)
+    else paste0("CONCLUSION: r is not close to 1 -> there is NO cycle of period ", lag)))
   if (plot) {
-    barplot(rs, names.arg = lags, col = ifelse(rs >= threshold, "firebrick", "steelblue"),
-            xlab = "lag", ylab = "r", main = "Autocorrelation by lag", ylim = c(min(0, rs), 1))
-    abline(h = threshold, lty = 2)
+    plot(x[1:(n - lag)], x[(1 + lag):n], pch = 19, col = "steelblue",
+         xlab = "X(t)", ylab = paste0("X(t+", lag, ")"), main = paste0("Autocorrelation, lag ", lag, ",  r = ", signif(r, 6)))
+    abline(lm(x[(1 + lag):n] ~ x[1:(n - lag)]), col = "firebrick", lwd = 2)
   }
-  invisible(tab)
+  invisible(if (is.null(scan_tab)) r else scan_tab)
 }
 
 
@@ -1159,6 +1207,13 @@ simple_index <- function(value, base_value) {
   cat("  ->", if (idx > 1) paste0("an INCREASE of ", full_digits((idx - 1) * 100), " % with the base period")
       else if (idx < 1) paste0("a DECREASE of ", full_digits((1 - idx) * 100), " % with the base period")
       else "no change", "\n")
+  final_box("SIMPLE INDEX", c(
+    paste0("X(t/t0) = ", full_digits(value), " / ", full_digits(base_value), " = ", full_digits(idx)),
+    box_line("Index in percentage (%)", idx * 100),
+    box_line("Variation (%)", (idx - 1) * 100),
+    if (idx > 1) paste0("-> INCREASE of ", full_digits((idx - 1) * 100), " % with respect to the base")
+    else if (idx < 1) paste0("-> DECREASE of ", full_digits((1 - idx) * 100), " % with respect to the base")
+    else "-> no change"))
   invisible(idx)
 }
 
@@ -1259,6 +1314,9 @@ invert_index <- function(index, percent = FALSE) {
   report_title("INVERSE INDEX  X(a/b) = 1 / X(b/a)")
   report_line("Known index X(b/a)", index)
   report_line("Inverse index X(a/b)", out)
+  final_box("INVERSE INDEX", c(
+    paste0("X(a/b) = 1 / X(b/a) = ", if (percent) "100 * 100 / " else "1 / ", full_digits(index)),
+    box_line(if (percent) "X(a/b) (%)" else "X(a/b)", out)))
   invisible(out)
 }
 
@@ -1286,6 +1344,9 @@ chain_index <- function(..., percent = FALSE) {
   report_title("CHAINED INDEX  X(a/b) * X(b/c) * ... = X(a/z)")
   for (i in seq_along(v)) report_line(paste0("Index ", i), v[i])
   report_line("Chained index X(a/z)", out)
+  final_box("CHAINED INDEX", c(
+    paste0("X(a/z) = ", paste(full_digits(v), collapse = if (percent) " % * " else " * "), if (percent) " %" else ""),
+    box_line(if (percent) "X(a/z) (%)" else "X(a/z)", out)))
   invisible(out)
 }
 
@@ -1331,6 +1392,15 @@ deflate <- function(nominal, cpi, labels = NULL, percent = FALSE) {
     if (is.null(labels)) labels <- seq_along(real)
     print(data.frame(period = labels, nominal = nominal, cpi = cpi_ratio, real = real), row.names = FALSE)
   }
+  if (length(real) == 1) {
+    final_box("DEFLATION: REAL VALUE", c(
+      paste0("Real value = ", full_digits(nominal), " / ", full_digits(cpi_ratio)),
+      box_line("REAL VALUE (money of the base period)", real)))
+  } else {
+    lb <- if (is.null(labels)) seq_along(real) else labels
+    final_box("DEFLATION: REAL VALUES (money of the base period)",
+              vapply(seq_along(real), function(i) paste0("Real(", lb[i], ") = ", full_digits(nominal[i]), " / ", full_digits(cpi_ratio[i]), " = ", full_digits(real[i])), character(1)))
+  }
   invisible(real)
 }
 
@@ -1364,5 +1434,10 @@ real_change <- function(nominal_change, cpi_change, percent = TRUE) {
   cat("  ->", if (ratio < 1) paste0("the purchasing power DECREASED by ", full_digits((1 - ratio) * 100), " %")
       else if (ratio > 1) paste0("the purchasing power INCREASED by ", full_digits((ratio - 1) * 100), " %")
       else "the purchasing power did not change", "\n")
+  final_box("REAL CHANGE (PURCHASING POWER)", c(
+    box_line("Real change (%)", (ratio - 1) * 100),
+    if (ratio < 1) paste0("-> the purchasing power DECREASED by ", full_digits((1 - ratio) * 100), " %")
+    else if (ratio > 1) paste0("-> the purchasing power INCREASED by ", full_digits((ratio - 1) * 100), " %")
+    else "-> the purchasing power did not change"))
   invisible(ratio)
 }

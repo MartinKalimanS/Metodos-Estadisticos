@@ -145,6 +145,18 @@ if (!exists("arithmetic_mean") || !exists("variance") || !exists("describe_data"
        "and only then source this Chapter 2 file.")
 }
 
+# Box helpers (they live in formulas_chapter1.R; defined here too so this file never fails
+# if an older Chapter 1 file is loaded).
+if (!exists("answer_box")) answer_box <- function(lines) {
+  w <- max(nchar(lines)) + 4
+  bar <- strrep("*", w)
+  cat("\n  ", bar, "\n", sep = "")
+  for (l in lines) cat("  * ", formatC(l, width = -(w - 4), flag = "-"), " *\n", sep = "")
+  cat("  ", bar, "\n\n", sep = "")
+}
+if (!exists("box_line")) box_line <- function(label, value) paste0(label, " = ", paste(full_digits(value), collapse = ", "))
+if (!exists("final_box")) final_box <- function(title, lines) answer_box(c(paste0(">>> ", title), "", lines))
+
 # -----------------------------------------------------------------------------
 # FULL PRECISION (no rounding anywhere)
 # -----------------------------------------------------------------------------
@@ -188,6 +200,12 @@ print.stat_fit <- function(x, ...) {
   cat(sprintf("  %-14s= %s\n", labels[1], full_digits(x$a)))
   cat(sprintf("  %-14s= %s\n", labels[2], full_digits(x$b)))
   if (is.function(x$report)) x$report()
+  final_box(x$description, c(
+    x$equation,
+    box_line(labels[1], x$a),
+    box_line(labels[2], x$b),
+    if (!is.null(x$r_squared)) box_line("R^2", x$r_squared),
+    if (!is.null(x$mse)) box_line("MSE", x$mse)))
   invisible(x)
 }
 
@@ -823,6 +841,12 @@ mse_of_model <- function(model, data = NULL, n = NULL) {
   report_line(paste0("RMSE (typical error, in the units of ", resp_name, ")"), sqrt(mse))
   report_line(paste0("Variance of ", resp_name, " (divides by N)"), variance(real, n))
   report_line("R^2 = 1 - MSE / variance", r2)
+  final_box(paste0("MSE OF THE MODEL:  ", model), c(
+    if (!is.null(coefs)) vapply(seq_along(coefs), function(k) box_line(names(coefs)[k], coefs[k]), character(1)),
+    box_line("SSE", sse),
+    box_line("MSE", mse),
+    box_line("RMSE", sqrt(mse)),
+    box_line("R^2", r2)))
   invisible(list(mse = mse, sse = sse, rmse = sqrt(mse), r_squared = r2,
                  coefficients = coefs, predicted = predicted, residuals = real - predicted))
 }
@@ -1451,6 +1475,12 @@ print.model_fit <- function(x, ...) {
   if (!is.null(x$lin)) report_line(paste0("Variance of ", x$response_name, " (Vy, divides by N)"), variance(x$response, x$weights))
   report_line(paste0(if (!is.null(x$lin)) "R^2 OF THE COURSE = " else "R^2 = ", "1 - MSE / variance of ", x$response_name), x$r_squared)
   cat("  (R^2 close to 1 = the model explains almost all the variation)\n")
+  final_box(paste0("FINAL RESULTS:  ", x$model), c(
+    paste0(x$response_name, " = ", filled),
+    vapply(seq_along(x$params), function(i) box_line(x$params[i], x$coefficients[i]), character(1)),
+    box_line("SSE", x$sse),
+    box_line("MSE", x$mse),
+    box_line("R^2", x$r_squared)))
   invisible(x)
 }
 
@@ -1845,6 +1875,21 @@ linear_regression <- function(x, y, n = NULL, x_name = NULL, y_name = NULL,
     for (v in predict_x_at) report_line(paste0("When ", yn, " = ", full_digits(v), ", predicted ", xn),
                                         xy$a + xy$b * v)
   }
+  final_box(paste0("FINAL RESULTS:  ", yn, " and ", xn), c(
+    paste0("REGRESSION LINE 1  R_Y/X:  ", yn, " = ", full_digits(yx$a), signed_full(yx$b), " * ", xn),
+    box_line("  INTERCEPT a", yx$a),
+    box_line("  SLOPE b", yx$b),
+    "",
+    paste0("REGRESSION LINE 2  R_X/Y:  ", xn, " = ", full_digits(xy$a), signed_full(xy$b), " * ", yn),
+    box_line("  INTERCEPT a'", xy$a),
+    box_line("  SLOPE b'", xy$b),
+    "",
+    box_line("Cov(X,Y)", cv),
+    box_line("r", r),
+    box_line("R^2", r^2),
+    paste0("Relationship: ", describe_correlation(r)),
+    if (!is.null(predict_y_at)) c("", vapply(predict_y_at, function(v) box_line(paste0("Predicted ", yn, " when ", xn, " = ", full_digits(v)), yx$a + yx$b * v), character(1))),
+    if (!is.null(predict_x_at)) c("", vapply(predict_x_at, function(v) box_line(paste0("Predicted ", xn, " when ", yn, " = ", full_digits(v)), xy$a + xy$b * v), character(1)))))
   if (plot) plot_regression_lines(x, y, n, TRUE,
                                   main = paste0(yn, " vs ", xn, " with regression lines"),
                                   x_name = xn, y_name = yn)
@@ -1948,6 +1993,7 @@ analyze_table <- function(table, x_values = NULL, y_values = NULL,
   cat("  ->", if (indep) paste0(x_name, " and ", y_name, " are INDEPENDENT (f_ij = f_i. * f_.j in every cell)\n")
       else paste0(x_name, " and ", y_name, " are NOT independent (the relative frequencies are not the product of the marginals)\n"))
   
+  cond_lines <- character(0)
   cond <- function(given, vals_given, lab_given, vals_other, lab_other, freq_fun, gname, oname) {
     for (g in given) {
       k <- which(abs(vals_given - g) < 1e-9)
@@ -1962,11 +2008,22 @@ analyze_table <- function(table, x_values = NULL, y_values = NULL,
       print(df, row.names = FALSE)
       report_line(paste0("Mean of ", oname, " given ", gname, " = ", g), arithmetic_mean(vals_other, f))
       report_line(paste0("Variance of ", oname, " given ", gname, " = ", g), variance(vals_other, f))
+      cond_lines <<- c(cond_lines,
+                       box_line(paste0("Mean of ", oname, " given ", gname, " = ", g), arithmetic_mean(vals_other, f)),
+                       box_line(paste0("Variance of ", oname, " given ", gname, " = ", g), variance(vals_other, f)))
     }
   }
   if (!is.null(given_x)) cond(given_x, xv, mx$lab, yv, my$lab, function(k) tab[k, ], x_name, y_name)
   if (!is.null(given_y)) cond(given_y, yv, my$lab, xv, mx$lab, function(k) tab[, k], y_name, x_name)
   
+  final_box(paste0("TABLE RESULTS:  ", x_name, " and ", y_name), c(
+    box_line("N (total frequency)", N),
+    box_line(paste0("Mean of ", x_name), arithmetic_mean(xv, ni)),
+    box_line(paste0("Mean of ", y_name), arithmetic_mean(yv, nj)),
+    box_line("Largest gap between f_ij and f_i. * f_.j", gap),
+    if (indep) paste0("CONCLUSION: ", x_name, " and ", y_name, " are INDEPENDENT")
+    else paste0("CONCLUSION: ", x_name, " and ", y_name, " are NOT independent"),
+    if (length(cond_lines) > 0) c("", cond_lines)))
   pairs <- table_to_pairs(tab, xv, yv)
   res <- linear_regression(pairs$x, pairs$y, pairs$n, x_name = x_name, y_name = y_name, plot = plot)
   invisible(c(list(pairs = pairs, independent = indep, N = N), res))
@@ -2094,6 +2151,18 @@ analyze_regression_lines <- function(line1, line2, vars = c("x", "y"),
     for (v in predict_x_at) report_line(paste0("When ", yn, " = ", full_digits(v), ", predicted ", xn), ap + bp * v)
   }
   
+  final_box("FINAL RESULTS: REGRESSION LINES", c(
+    paste0(yx_name, " is R_Y/X:  ", yn, " = ", full_digits(a), signed_full(b), " * ", xn),
+    paste0(xy_name, " is R_X/Y:  ", xn, " = ", full_digits(ap), signed_full(bp), " * ", yn),
+    box_line("b (slope of Y on X)", b),
+    box_line("b' (slope of X on Y)", bp),
+    box_line("R^2 = b * b'", cc$r2),
+    box_line("r", r),
+    box_line(paste0("Mean of ", xn), mx),
+    box_line(paste0("Mean of ", yn), my),
+    if (!is.null(vx)) c(box_line(paste0("Variance of ", xn), vx), box_line(paste0("Variance of ", yn), vy), box_line("Covariance", cv)),
+    if (!is.null(predict_y_at)) c("", vapply(predict_y_at, function(v) box_line(paste0("Predicted ", yn, " when ", xn, " = ", full_digits(v)), a + b * v), character(1))),
+    if (!is.null(predict_x_at)) c("", vapply(predict_x_at, function(v) box_line(paste0("Predicted ", xn, " when ", yn, " = ", full_digits(v)), ap + bp * v), character(1)))))
   out <- list(y_on_x = c(a = a, b = b), x_on_y = c(a = ap, b = bp), r = r,
               r_squared = cc$r2, mean_x = mx, mean_y = my,
               var_x = vx, var_y = vy, covariance = cv)
@@ -2128,6 +2197,12 @@ analyze_regression_lines <- function(line1, line2, vars = c("x", "y"),
     report_line("New correlation coefficient r", cv2 / sqrt(vx2 * vy2))
     cat("  ", yn, " = ", full_digits(my2 - b2 * mx2), signed_full(b2), " * ", xn, "\n", sep = "")
     cat("  ", xn, " = ", full_digits(mx2 - bp2 * my2), signed_full(bp2), " * ", yn, "\n", sep = "")
+    final_box("FINAL RESULTS AFTER THE CHANGE", c(
+      box_line("N", N2), box_line(paste0("Mean of ", xn), mx2), box_line(paste0("Mean of ", yn), my2),
+      box_line(paste0("Variance of ", xn), vx2), box_line(paste0("Variance of ", yn), vy2),
+      box_line("Covariance", cv2), box_line("r", cv2 / sqrt(vx2 * vy2)),
+      paste0(yn, " = ", full_digits(my2 - b2 * mx2), signed_full(b2), " * ", xn),
+      paste0(xn, " = ", full_digits(mx2 - bp2 * my2), signed_full(bp2), " * ", yn)))
     out$after <- list(N = N2, mean_x = mx2, mean_y = my2, var_x = vx2, var_y = vy2,
                       covariance = cv2, r = cv2 / sqrt(vx2 * vy2),
                       y_on_x = c(a = my2 - b2 * mx2, b = b2),
@@ -2239,6 +2314,15 @@ compare_fits <- function(x, y, n = NULL, predict_at = NULL, plot = TRUE) {
     }
   }
   
+  bm <- models[[best]]
+  final_box("FINAL RESULT: BEST OF THE 4 FITS", c(
+    paste0("BEST MODEL: ", best, "  (highest R^2 = lowest MSE)"),
+    bm$equation,
+    "",
+    "RANKING (best first):",
+    vapply(seq_len(nrow(tab)), function(i) paste0("  ", i, ". ", sprintf("%-12s", tab$model[i]), " R^2 = ", full_digits(tab$R2[i]), "   MSE = ", full_digits(tab$MSE[i])), character(1)),
+    if (!is.null(predict_at)) c("", paste0("PREDICTIONS with the best model (", best, "):"),
+                                vapply(predict_at, function(v) box_line(paste0("  x = ", full_digits(v)), bm$f(v)), character(1)))))
   if (plot) {
     xr <- range(c(x, predict_at)); g <- seq(xr[1], xr[2], length.out = 300)
     curves <- lapply(models, function(m) m$f(g))
