@@ -67,6 +67,11 @@
 #                                                 x_name = "height", y_name = "weight")
 #    + distribution of Y given X=165 / of X given Y=65
 #                                   analyze_table(..., given_x = 165, given_y = 65)
+#    + PREDICT Y at X = 2.5 / X at Y = 1.5 (uses table_to_pairs() and
+#      linear_regression() internally, you do not call them yourself)
+#                                   analyze_table(..., predict_y_at = 2.5)
+#                                   analyze_table(..., predict_x_at = 1.5)
+#                                   analyze_table(..., predict_y_at = c(2.5, 3), predict_x_at = 1.5)
 #    The rows of my table are Y     analyze_table(..., rows_are = "Y")
 #    Only "are they independent?"   is_independent(tab)
 #    Table -> pairs, for other functions
@@ -93,6 +98,10 @@
 #    Power                          fit_model("y = a*x^b")
 #    With frequencies               fit_model("y = a + b*x", n = n)
 #    Data in a table "pares"        fit_model("y = a + b*x", data = pares, n = pares$n)
+#    SEVERAL models: fit all, compare, pick the best and PREDICT with it
+#                                   fit_model(c("y = a + b*x", "y = a*x^2 + b*x + c", "y = a*e^(b*x)", "y = 1/(a + b*x)"),
+#                                             predict_at = c(8, 9))
+#                                   (several variables: predict_at = data.frame(x = c(1,2), y = c(3,4)))
 #    Predict with the fitted model  m <- fit_model("y = a*x^2 + b*x + c")
 #                                   predict_model(m, data.frame(x = c(6, 7)))
 #    Exponential / hyperbolic / power as in the slides (A = ln(a), r, MSE, R^2)
@@ -1282,8 +1291,13 @@ join_signed_terms <- function(values, labels, sep = " ") {
 #   fit_model("z = a + b*x + c*y")         # a = 2.2045..., b = -1.0568..., c = 1.6591...
 # -----------------------------------------------------------------------------
 fit_model <- function(model, data = NULL, n = NULL, plot = TRUE,
-                      method = "auto", start = NULL) {
+                      method = "auto", start = NULL, predict_at = NULL) {
   caller <- parent.frame()
+  # SEVERAL MODELS: fit_model(c("y = a + b*x", "y = a*x^2 + b*x + c"), predict_at = ...)
+  # fits all of them, compares them, picks the best and predicts with it
+  if (length(model) > 1) {
+    return(compare_models_internal(model, data, n, plot, method, start, predict_at, caller))
+  }
   env <- if (is.null(data)) caller else list2env(as.list(data), parent = caller)
   sides <- strsplit(model, "=", fixed = TRUE)[[1]]
   if (length(sides) != 2) {
@@ -1887,6 +1901,8 @@ linear_regression <- function(x, y, n = NULL, x_name = NULL, y_name = NULL,
     box_line("Cov(X,Y)", cv),
     box_line("r", r),
     box_line("R^2", r^2),
+    box_line("% of variability EXPLAINED by the line (100*R^2)", 100 * r^2),
+    box_line("% of variability NOT explained (100*(1-R^2))", 100 * (1 - r^2)),
     paste0("Relationship: ", describe_correlation(r)),
     if (!is.null(predict_y_at)) c("", vapply(predict_y_at, function(v) box_line(paste0("Predicted ", yn, " when ", xn, " = ", full_digits(v)), yx$a + yx$b * v), character(1))),
     if (!is.null(predict_x_at)) c("", vapply(predict_x_at, function(v) box_line(paste0("Predicted ", xn, " when ", yn, " = ", full_digits(v)), xy$a + xy$b * v), character(1)))))
@@ -1901,13 +1917,18 @@ linear_regression <- function(x, y, n = NULL, x_name = NULL, y_name = NULL,
 # analyze_table(table, x_values = NULL, y_values = NULL,
 #               x_limits = NULL, y_limits = NULL, rows_are = "X",
 #               x_name = "X", y_name = "Y", given_x = NULL, given_y = NULL,
-#               plot = TRUE)
+#               predict_y_at = NULL, predict_x_at = NULL, plot = TRUE)
 # -----------------------------------------------------------------------------
 # WHAT IT DOES : Complete analysis of a two-way frequency table in ONE call:
 #                joint absolute and relative tables with their totals,
 #                marginal distributions of X and of Y (mean, variance, sd),
 #                independence check, optional conditional distributions,
-#                covariance, correlation, both regression lines, and the plot.
+#                covariance, correlation, both regression lines,
+#                optional PREDICTIONS (see predict_y_at / predict_x_at),
+#                and the plot.
+#                Internally it converts the table with table_to_pairs() and
+#                runs linear_regression() on the pairs, so the predictions
+#                are exactly the ones of those two functions.
 # PARAMETERS   :
 #   table    : matrix of absolute frequencies.
 #   x_values, y_values : the value of X for each row of the table and the
@@ -1921,17 +1942,31 @@ linear_regression <- function(x, y, n = NULL, x_name = NULL, y_name = NULL,
 #   x_name, y_name : names to show.
 #   given_x  : (optional) value(s) of X: shows the distribution of Y given X.
 #   given_y  : (optional) value(s) of Y: shows the distribution of X given Y.
+#   predict_y_at : (optional) value(s) of X at which to PREDICT Y with the
+#              regression line of Y on X. Leave it NULL to skip it. If your
+#              X is grouped in intervals, give the number itself (e.g. 165),
+#              not the interval.
+#   predict_x_at : (optional) value(s) of Y at which to PREDICT X with the
+#              regression line of X on Y.
+#   plot     : FALSE to skip the plot.
 # RETURNS      : Invisibly, a list with the (x, y, n) pairs, the results of
 #                the regression (see linear_regression) and `independent`.
 # EXAMPLE      :
 #   tab <- matrix(c(2,4,1, 0,4,6, 0,3,1), nrow = 3, byrow = TRUE)
 #   analyze_table(tab, x_limits = c(150,160,170,180), y_limits = c(50,60,70,80),
 #                 x_name = "height", y_name = "weight", given_x = 165)
+#   # + prediction of the weight of someone 172 cm tall:
+#   analyze_table(tab, x_limits = c(150,160,170,180), y_limits = c(50,60,70,80),
+#                 x_name = "height", y_name = "weight", predict_y_at = 172)
+#   # table of the exam (X = 1,2,3 ; Y = 0,1,2,3), predict Y when X = 2.5:
+#   tab <- matrix(c(8,5,2,0, 6,10,8,3, 1,4,7,6), nrow = 3, byrow = TRUE)
+#   analyze_table(tab, x_values = 1:3, y_values = 0:3, given_x = 2, predict_y_at = 2.5)
 # -----------------------------------------------------------------------------
 analyze_table <- function(table, x_values = NULL, y_values = NULL,
                           x_limits = NULL, y_limits = NULL, rows_are = "X",
                           x_name = "X", y_name = "Y", given_x = NULL,
-                          given_y = NULL, plot = TRUE) {
+                          given_y = NULL, predict_y_at = NULL,
+                          predict_x_at = NULL, plot = TRUE) {
   tab <- as.matrix(table)
   if (toupper(rows_are) == "Y") {
     tab <- t(tab)
@@ -2024,8 +2059,12 @@ analyze_table <- function(table, x_values = NULL, y_values = NULL,
     if (indep) paste0("CONCLUSION: ", x_name, " and ", y_name, " are INDEPENDENT")
     else paste0("CONCLUSION: ", x_name, " and ", y_name, " are NOT independent"),
     if (length(cond_lines) > 0) c("", cond_lines)))
+  # table -> (x, y, n) pairs, then the full linear regression (with the
+  # optional predictions) on those pairs
   pairs <- table_to_pairs(tab, xv, yv)
-  res <- linear_regression(pairs$x, pairs$y, pairs$n, x_name = x_name, y_name = y_name, plot = plot)
+  res <- linear_regression(pairs$x, pairs$y, pairs$n, x_name = x_name, y_name = y_name,
+                           predict_y_at = predict_y_at, predict_x_at = predict_x_at,
+                           plot = plot)
   invisible(c(list(pairs = pairs, independent = indep, N = N), res))
 }
 
@@ -2169,8 +2208,14 @@ analyze_regression_lines <- function(line1, line2, vars = c("x", "y"),
   
   # remove / add an observation
   if (!is.null(remove) || !is.null(add)) {
-    if (is.null(N) || is.null(vx) || is.na(vx) || is.na(vy))
-      stop("To remove/add an observation I need N and a variance (var_x, var_y, sd_x or sd_y).")
+    if (is.null(N) || is.null(vx) || is.na(vx) || is.na(vy)) {
+      missing_what <- c(if (is.null(N)) "N (number of observations, it is in the statement)",
+                        if (is.null(vx) || is.na(vx) || is.na(vy)) "a variance (var_x, var_y, sd_x or sd_y)")
+      cat("\n  !! The part above is complete, but I cannot remove/add the observation because you did not give: ",
+          paste(missing_what, collapse = " and "),
+          ".\n     Without N the sums cannot be rebuilt. Example: N = 25, var_x = 9, remove = c(6, 3)\n", sep = "")
+      return(invisible(out))
+    }
     Sx  <- N * mx;  Sy <- N * my
     Sxx <- N * (vx + mx^2); Syy <- N * (vy + my^2); Sxy <- N * (cv + mx * my)
     N2 <- N
@@ -2334,4 +2379,152 @@ compare_fits <- function(x, y, n = NULL, predict_at = NULL, plot = TRUE) {
     legend("topleft", legend = names(curves), col = cols[names(curves)], lwd = 2, bty = "n")
   }
   invisible(list(table = tab, models = models, best = best))
+}
+
+
+# -----------------------------------------------------------------------------
+# INTERNAL: compare_models_internal   (called by compare_models() and by fit_model() with several models)
+#   Fits every model, prints each one, ranks them by R^2 (= lowest MSE, measured
+#   on the ORIGINAL response), says which is the best and, if you give
+#   `predict_at`, predicts with the best one.
+#   Use it through fit_model():
+#     fit_model(c("y = a + b*x", "y = a*x^2 + b*x + c", "y = a*e^(b*x)"),
+#               predict_at = c(8, 9))
+#     fit_model(c("z = a + b*x + c*y", "z = a*x + b*y"),
+#               predict_at = data.frame(x = c(1, 2), y = c(3, 4)))
+#   predict_at : numbers (if the models have ONE variable x) or a data.frame
+#                with a column per variable of the models.
+# -----------------------------------------------------------------------------
+compare_models_internal <- function(models, data, n, plot, method, start, predict_at, caller) {
+  fits <- list(); skipped <- character(0)
+  for (m in models) {
+    f <- tryCatch(
+      do.call(fit_model, list(m, data = data, n = n, plot = FALSE, method = method, start = start),
+              envir = caller),
+      error = function(e) { skipped <<- c(skipped, paste0(m, "  ->  ", conditionMessage(e))); NULL })
+    if (!is.null(f)) fits[[m]] <- f
+  }
+  if (length(fits) == 0) stop("None of the models could be fitted:\n", paste(skipped, collapse = "\n"))
+  resp <- unique(vapply(fits, function(f) f$response_name, character(1)))
+  if (length(resp) > 1) stop("All the models must predict the same variable (the one before the \"=\").")
+  tab <- data.frame(model = names(fits),
+                    SSE = vapply(fits, function(f) f$sse, numeric(1)),
+                    MSE = vapply(fits, function(f) f$mse, numeric(1)),
+                    R2  = vapply(fits, function(f) f$r_squared, numeric(1)),
+                    row.names = NULL)
+  tab <- tab[order(-tab$R2), ]
+  best <- tab$model[1]; bf <- fits[[best]]
+  filled_of <- function(f) {
+    s <- paste(deparse(do.call(substitute, list(f$rhs, as.list(f$coefficients))), width.cutoff = 500), collapse = "")
+    paste0(f$response_name, " = ", gsub("+ -", "- ", s, fixed = TRUE))
+  }
+  
+  report_title(paste0("COMPARISON OF ", length(fits), " MODELS FOR ", resp))
+  k_total <- length(fits)
+  for (k in seq_along(fits)) {
+    cat("\n", strrep("#", 72), "\n#  MODEL ", k, " OF ", k_total, ":  ", names(fits)[k], "\n", strrep("#", 72), "\n", sep = "")
+    print(fits[[k]])
+  }
+  cat("\n", strrep("#", 72), "\n#  COMPARISON OF THE ", k_total, " MODELS\n", strrep("#", 72), "\n", sep = "")
+  for (s in skipped) cat("  SKIPPED ->", s, "\n")
+  
+  report_section("RANKING (best first; R^2 = 1 - MSE / variance of the response, on the ORIGINAL values)")
+  for (i in seq_len(nrow(tab)))
+    cat(sprintf("  %d. %s\n       R^2 = %s    MSE = %s\n", i, tab$model[i],
+                full_digits(tab$R2[i]), full_digits(tab$MSE[i])))
+  cat("\n  BEST MODEL :", best, "(highest R^2 = lowest MSE)\n")
+  if (nrow(tab) > 1) cat("  WORST MODEL:", tab$model[nrow(tab)], "(lowest R^2 = highest MSE)\n")
+  if (nrow(tab) > 1 && length(unique(vapply(fits, function(f) length(f$params), numeric(1)))) > 1)
+    cat("  Note: a model with more coefficients always fits the given data at least as well;\n",
+        "  check the plot / how far you extrapolate before trusting the prediction.\n", sep = "")
+  
+  nd <- NULL; preds <- NULL
+  if (!is.null(predict_at)) {
+    nd <- if (is.data.frame(predict_at) || is.list(predict_at)) as.list(predict_at) else {
+      if (length(bf$data_vars) != 1)
+        stop("The best model has several variables (", paste(bf$data_vars, collapse = ", "),
+             "): give predict_at as a data.frame with one column per variable.")
+      setNames(list(predict_at), bf$data_vars)
+    }
+    preds <- predict_model(bf, nd)
+    report_section(paste0("Predictions of ", resp, " with the BEST model"))
+    for (i in seq_along(preds)) {
+      where <- paste(vapply(names(nd), function(k) paste0(k, " = ", full_digits(nd[[k]][i])), character(1)), collapse = ", ")
+      report_line(paste0("When ", where, ", predicted ", resp), preds[i])
+    }
+  }
+  
+  pred_lines <- if (!is.null(preds)) c("", paste0("PREDICTIONS with the best model:"),
+                                       vapply(seq_along(preds), function(i) box_line(paste0("  ",
+                                                                                            paste(vapply(names(nd), function(k) paste0(k, " = ", full_digits(nd[[k]][i])), character(1)), collapse = ", ")), preds[i]), character(1)))
+  final_box("FINAL RESULT: BEST MODEL", c(
+    paste0("BEST: ", best),
+    filled_of(bf),
+    box_line("MSE", bf$mse),
+    box_line("R^2", bf$r_squared),
+    box_line("% of variability explained (100*R^2)", 100 * bf$r_squared),
+    "",
+    if (nrow(tab) > 1) paste0("WORST: ", tab$model[nrow(tab)]),
+    "",
+    "RANKING (best first):",
+    vapply(seq_len(nrow(tab)), function(i) paste0("  ", i, ". ", tab$model[i], "   R^2 = ", full_digits(tab$R2[i])), character(1)),
+    pred_lines))
+  
+  vars <- unique(vapply(fits, function(f) if (length(f$data_vars) == 1) f$data_vars else NA_character_, character(1)))
+  if (plot && length(vars) == 1 && !is.na(vars)) {
+    v <- vars; xv <- get(v, envir = bf$env)
+    xr <- range(c(xv, if (!is.null(nd)) nd[[v]]))
+    g <- seq(xr[1], xr[2], length.out = 300)
+    curves <- lapply(fits, function(f) suppressWarnings(predict_model(f, setNames(list(g), v))))
+    ry <- range(bf$response); pad <- 2 * diff(ry)
+    plot(xv, bf$response, pch = 19, xlim = xr, ylim = c(ry[1] - pad, ry[2] + pad),
+         xlab = v, ylab = resp, main = paste("Models compared - best:", best))
+    cols <- c("blue", "darkgreen", "orange", "red", "purple", "brown", "gray40", "cyan4")
+    k <- 0
+    for (m in names(curves)) { k <- k + 1
+    lines(g, curves[[m]], col = cols[(k - 1) %% length(cols) + 1], lwd = if (m == best) 3 else 1.5) }
+    if (!is.null(preds)) points(nd[[v]], preds, pch = 8, cex = 1.5, col = "black")
+    legend("topleft", legend = names(curves), col = cols[(seq_along(curves) - 1) %% length(cols) + 1], lwd = 2, bty = "n", cex = 0.8)
+  }
+  invisible(list(fits = fits, table = tab, best = best, best_fit = bf, predictions = preds))
+}
+
+
+# =============================================================================
+#  compare_models(..., data = NULL, n = NULL, predict_at = NULL, plot = TRUE,
+#                 method = "auto", start = NULL)
+# =============================================================================
+# FOR WHICH CASE : "Fit these models, tell me which one is the best / the worst
+#                  and predict with the best one." Give as many models as you
+#                  want, each written as text like in fit_model().
+# WHAT IT DOES   : fits every model one after the other (full report of each),
+#                  ranks them by R^2 (= lowest MSE, on the ORIGINAL response),
+#                  says which is the BEST and which is the WORST, predicts with
+#                  the best one, and draws all the curves in one plot.
+# PARAMETERS     :
+#   ...        : the models, as separate texts or in a vector c(...). All must
+#                have the same variable before the "=".
+#   data       : (optional) data.frame / list with the variables.
+#   n          : (optional) frequency of each observation.
+#   predict_at : (optional) where to predict with the BEST model: numbers (one
+#                variable) or a data.frame with a column per variable.
+#   plot       : FALSE to skip the plot.
+#   method, start : as in fit_model() (rarely needed).
+# RETURNS        : (invisibly) list with $fits, $table (ranking), $best,
+#                  $best_fit and $predictions.
+# EXAMPLE        :
+#   x <- 1:7; y <- c(3.1, 4.0, 5.6, 7.9, 11.8, 17.0, 24.9)
+#   compare_models("y = a + b*x", "y = a*x^2 + b*x + c", "y = a*e^(b*x)",
+#                  "y = 1/(a + b*x)", predict_at = c(8, 9))
+#   compare_models("z = a + b*x + c*y", "z = a*x + b*y",
+#                  predict_at = data.frame(x = c(1, 2), y = c(3, 4)))
+# =============================================================================
+compare_models <- function(..., data = NULL, n = NULL, predict_at = NULL,
+                           plot = TRUE, method = "auto", start = NULL) {
+  models <- unlist(list(...))
+  if (length(models) == 0 || !is.character(models))
+    stop('Give the models as text, e.g. compare_models("y = a + b*x", "y = a*e^(b*x)").')
+  if (length(models) < 2)
+    stop("Give at least 2 models to compare (for just one use fit_model()).")
+  compare_models_internal(models, data, n, plot, method, start, predict_at, parent.frame())
 }
