@@ -1,153 +1,138 @@
 # =============================================================================
-#  CHAPTER 2 - STATISTICAL MODELLING (bivariate data, regression, correlation)
-#  One R function for every formula / concept in the Chapter 2 slides.
+#  CHAPTER 3 - TIME SERIES AND INDEX NUMBERS
+#  One R function for every kind of exercise in the Chapter 3 slides.
 #  (Department of Applied Mathematics, University of Malaga, 2024-2025)
 # =============================================================================
 #
 #  HOW TO USE THIS FILE
 #  ---------------------
-#  This file BUILDS ON Chapter 1 (it reuses arithmetic_mean(), variance() and
-#  standard_deviation() from there instead of redefining them). Always source
-#  Chapter 1 FIRST, then this file:
+#  1. Source Chapter 1 FIRST (this file reuses its printing helpers), then this
+#     file (if you forget Chapter 1, it tries to find it in the usual folders):
 #
-#      source("formulas_chapter1.R")
-#      source("formulas_chapter2.R")
-#      pearson_correlation(c(1,2,3), c(2,4,5))   # 0.9819805
+#         source("chapter_1/formulas_chapter1.R")
+#         source("chapter_3/formulas_chapter3.R")
 #
-#  If you forget to source Chapter 1 first, this file will stop with a clear
-#  error message telling you to do so.
-#
-#  WHAT "BIVARIATE" DATA LOOKS LIKE HERE
-#  ---------------------------------------
-#  Almost every function in this file works with a variable X and a variable
-#  Y observed TOGETHER, in pairs: (x1, y1), (x2, y2), .... You give them as
-#  two vectors of the same length:
-#      x <- c(1, 2, 3, 4, 5)
-#      y <- c(1, 1, 2, 2, 4)
-#  Just like in Chapter 1, you can optionally add a third vector `n` with how
-#  many times each pair (x_i, y_i) repeats (its absolute frequency), instead
-#  of listing every repeated observation:
-#      x <- c(1, 2, 3)        # the different values of X that were paired
-#      y <- c(1, 1, 2)        # the different values of Y that were paired
-#      n <- c(4, 2, 1)        # pair (1,1) appeared 4 times, (2,1) twice, ...
-#  If a joint (two-way) frequency table is what you have (rows = categories
-#  of X, columns = categories of Y, cells = how many times that pair
-#  appeared), use `table_to_pairs()` first to turn it into this (x, y, n)
-#  form, which every other function expects.
-#
-#  GROUPED (CONTINUOUS) VARIABLES
-#  --------------------------------
-#  If X and/or Y are grouped into intervals, use the class mark (the
-#  midpoint of each interval, from Chapter 1's `class_mark()`) as the value
-#  that represents that interval, exactly like in Chapter 1.
+#  2. Type the call that matches your exercise (see the cheat sheet below).
+#     Every main function prints a complete report in plain English with ALL
+#     the decimals, and draws the plot. Only base R is used.
 #
 #  CHEAT SHEET: EXACTLY WHAT TO TYPE FOR EACH CASE  (read this first!)
 #  ===================================================================
-#  Each call prints the full report (all decimals, English) and draws the plot.
-#  The FIRST variable you give is X and the second is Y.
-#  Frequencies always go in n and you must pass n to EVERY call.
 #
-#  COMPARE LINEAR / QUADRATIC / HYPERBOLIC / EXPONENTIAL AND PICK THE BEST
-#    One call, all 4 fits + ranking   compare_fits(x, y)
-#    With predictions / frequencies   compare_fits(x, y, predict_at = c(6,10))    compare_fits(x, y, n)
-
-#  TWO LISTS OF NUMBERS x, y (regression, correlation)
-#    No frequencies                 linear_regression(x, y)
-#    With frequencies               linear_regression(x, y, n)
-#    Predict y at x = 3.5 / x at y = 10
-#                                   linear_regression(x, y, n, predict_y_at = 3.5, predict_x_at = 10)
-#    Use the real names of the variables
-#                                   linear_regression(x, y, x_name = "hours", y_name = "grade")
-#    Only the covariance / only r   covariance(x, y, n)    pearson_correlation(x, y, n)
+#  TIME SERIES (the data changes over time)
+#  ----------------------------------------
+#  "Calculate the moving averages of order k"
+#       moving_average(c(6, 6.2, 5.1, 4.9, 5.2, 5.8, 7), k = 3)
+#       moving_average(x, k = 4, labels = 1959:1965)      # k even: extremes x 0.5
 #
-#  A TWO-WAY TABLE tab (rows = X, columns = Y)
-#    Values of X and Y              analyze_table(tab, x_values = c(1,2,3), y_values = c(10,20,30))
-#    Intervals (boundaries)         analyze_table(tab, x_limits = c(150,160,170,180),
-#                                                 y_limits = c(50,60,70,80),
-#                                                 x_name = "height", y_name = "weight")
-#    + distribution of Y given X=165 / of X given Y=65
-#                                   analyze_table(..., given_x = 165, given_y = 65)
-#    + PREDICT Y at X = 2.5 / X at Y = 1.5 (uses table_to_pairs() and
-#      linear_regression() internally, you do not call them yourself)
-#                                   analyze_table(..., predict_y_at = 2.5)
-#                                   analyze_table(..., predict_x_at = 1.5)
-#                                   analyze_table(..., predict_y_at = c(2.5, 3), predict_x_at = 1.5)
-#    The rows of my table are Y     analyze_table(..., rows_are = "Y")
-#    Only "are they independent?"   is_independent(tab)
-#    Table -> pairs, for other functions
-#                                   p <- table_to_pairs(tab, x_marks, y_marks)
-#                                   linear_regression(p$x, p$y, p$n)
+#  "Find the trend using least squares / regression line of the series"
+#       trend_line(x)                         # t = 1, 2, 3, ...
+#       trend_line(x, labels = 1959:1965, forecast = 2)   # + 2 periods ahead
 #
-#  TWO REGRESSION LINES GIVEN AS EQUATIONS (which is which, r, means...)
-#    Identify them, means, r        analyze_regression_lines("y = 2 + 0.5*x", "x = 1 + 0.8*y")
-#    Not solved for x or y          analyze_regression_lines("3x + 2y = 20", "x + 4y = 15")
-#    + variances / covariance (give var_x, var_y, sd_x or sd_y)
-#                                   analyze_regression_lines(l1, l2, sd_x = 2)
-#    Remove / add an observation (N needed)
-#                                   analyze_regression_lines(l1, l2, N = 20, var_x = 4, remove = c(4,4))
-#                                   analyze_regression_lines(l1, l2, N = 20, var_x = 4, add = c(3,4))
+#  Quarterly / monthly data table (rows = years, columns = seasons):
+#  "Calculate the trend-cycle", "seasonal indices", "corrected seasonal
+#  indices", "random component", "deseasonalised series", "regression line of
+#  the deseasonalised series", "true trend", "predict the next periods"
+#  -> ALL OF THEM with ONE call:
+#       tab <- matrix(c(178.2,153.2,185.9,163.6,  196.3,156.9,197.9,166.4, ...),
+#                     ncol = 4, byrow = TRUE,
+#                     dimnames = list(1980:1984, c("Spring","Summer","Autumn","Winter")))
+#       decompose_series(tab)                             # multiplicative X = T.E.C.A
+#       decompose_series(tab, model = "additive")         # additive X = T+E+C+A
+#       decompose_series(tab, forecast = 4)               # + predict next 4 periods
 #
-#  FIT A MODEL WRITTEN AS TEXT (coefficient letters = a, b, c...; * always
-#  between coefficient and variable; parentheses in denominators / exponents)
-#    Straight line                  fit_model("y = a + b*x")
-#    Parabola                       fit_model("y = a*x^2 + b*x + c")
-#    Plane (two predictors)         fit_model("z = a + b*x + c*y")
-#    sin / cos, log, ...            fit_model("y = a*sin(x) + b*cos(x)")   fit_model("y = a + b*log(x)")
-#    Exponential                    fit_model("y = a*e^(b*x)")
-#    Hyperbolic                     fit_model("y = 1/(a + b*x)")
-#    Power                          fit_model("y = a*x^b")
-#    With frequencies               fit_model("y = a + b*x", n = n)
-#    Data in a table "pares"        fit_model("y = a + b*x", data = pares, n = pares$n)
-#    Predict with the fitted model  m <- fit_model("y = a*x^2 + b*x + c")
-#                                   predict_model(m, data.frame(x = c(6, 7)))
-#    Exponential / hyperbolic / power as in the slides (A = ln(a), r, MSE, R^2)
-#                                   fit_exponential(x, y, n)   fit_hyperbolic(x, y, n)   fit_power(x, y, n)
+#  "Find the components T, E, C and A" / "apply the multiplicative hypothesis"
+#  (SHORT version: only the 4 components and X = T.E.C.A for each period)
+#       time_series_components(tab)                       # or (x, period = 4, start = c(1980, 1))
+#       time_series_components(tab, model = "additive")   # X = T+E+C+A
+#       time_series_components(tab, forecast = 4)         # + prediction T*E
 #
-#  ONLY THE MSE
-#    Of a model with unknown a, b   mse_of_model("y = a*e^(b*x)")
-#    Of an equation already given   mse_of_model("y = 5.88*e^(-0.13*x)")
-#    Real vs predicted vectors      mse_fit(real, predicted, n)
+#  "Solve the exercise STEP BY STEP like in the slides" (T.C, E.A, indices,
+#  corrected indices, A, deseasonalised, regression line, true trend, C, prediction)
+#       time_series_steps(tab)                            # or (x, period = 4, start = c(1980, 1))
+#       time_series_steps(tab, forecast = 4)              # + step 10: prediction
+#       time_series_steps(tab, model = "additive")
 #
-#  COMMON MISTAKES: write b*x, never bx   |   1/(a + b*x), not 1/a + b*x
-#  |   pass n   |   the first variable is X.
+#  WHICH `period` DO I USE?  (period = how many data there are in ONE cycle = columns of the table)
+#       quarterly data  (trimestral, Q1..Q4)         period = 4
+#       four-month data (cuatrimestral)              period = 3
+#       half-year data  (semestral)                  period = 2
+#       bimonthly data  (bimestral)                  period = 6
+#       monthly data                                 period = 12
+#       daily data, weekly cycle (Mon..Sun)          period = 7
+#       hourly data, daily cycle                     period = 24
+#       (a "trimestre" has 3 months -> 4 per year -> period 4;
+#        a "cuatrimestre" has 4 months -> 3 per year -> period 3)
+#       start = c(first year, first season), e.g. quarterly data from Q3 of 1990: start = c(1990, 3)
 #
-#  INDEX (in the order of the slides)
-#  ------------------------------------
-#  1. JOINT FREQUENCY TABLES
-#       joint_absolute_table, joint_relative_table, table_to_pairs,
-#       marginal_absolute_x, marginal_absolute_y,
-#       marginal_relative_x, marginal_relative_y,
-#       conditional_relative_y_given_x, conditional_relative_x_given_y,
-#       is_independent
-#  2. CENTRE OF GRAVITY, MOMENTS AND COVARIANCE
-#       bivariate_mean, moment_xy, ordinary_moment_xy, central_moment_xy,
-#       covariance, covariance_shortcut
-#  3. SIMPLE LINEAR REGRESSION AND CORRELATION
-#       regression_y_on_x, regression_x_on_y, predict_linear,
-#       pearson_correlation, r_squared_from_slopes
-#  4. GOODNESS OF FIT (works for ANY model: linear, exponential, ...)
-#       sse_fit, mse_fit, r_squared_fit, variance_explained_fit,
-#       mse_of_model   <- MSE of a model given as text, e.g. "y = 3 + 0.5*x"
-#  5. NON-LINEAR FITS (turned into a straight line first)
-#       fit_exponential, predict_exponential,
-#       fit_hyperbolic, predict_hyperbolic,
-#       fit_power, predict_power
-#  6. MULTIPLE LINEAR REGRESSION
-#       multiple_regression, predict_multiple, polynomial_regression,
-#       fit_model, predict_model       <- fit ANY model written as text,
-#                                         as in the exam, e.g.
-#                                         "y = a*x^2 + b*x + c"
-#  7. GRAPHS
-#       plot_regression_lines
+#  "Calculate the seasonal variation indices / corrected indices of the following
+#  table E.A (X / T.C)"  -> the exercise GIVES the table E.A (not the series X)
+#       Copy the table row by row between quotes, "-" where it has a dash:
+#       seasonal_indices("- - 1.0778 0.9337
+#                         1.1079 0.8764 1.1025 0.9246
+#                         1.0906 0.8743 1.0932 0.9337
+#                         1.1069 0.8932 1.0703 0.9573
+#                         1.0559 0.8829 - -",
+#                        season_names = c("Spring","Summer","Autumn","Winter"))
+#       (period = 4 columns by default; monthly table: period = 12)
+#
+#  The same, but the data is a single list of numbers:
+#       decompose_series(x, period = 4, start = c(1980, 1))
+#       (period = 4 quarterly, 12 monthly;  start = c(first year, first season))
+#
+#  "Does the series have a cycle of period 3?" / "find the cycle"
+#       autocorrelation(x, lag = 3)           # r between X(t) and X(t+3)
+#       autocorrelation(x)                    # tries all the lags and finds the best
+#       WHICH lag?  = the period of the cycle they ask about:
+#         "period 3" -> 3 | quarterly yearly pattern -> 4 | monthly yearly -> 12
+#         semester -> 2 | daily, weekly pattern -> 7 | hourly, daily pattern -> 24
+#
+#  INDEX NUMBERS
+#  -------------
+#  "Calculate the simple index of 1980 with base 1970"
+#       simple_index(148, 123)                # value in the period, value in the base
+#  "Calculate all the elementary indices with base 2000"
+#       index_numbers(c(1254, 1345, 1408, 1451), base = 2000, labels = 2000:2003)
+#  "Index I(a/b) and I(b/c) are known, find I(a/c)"       chain_index(i_ab, i_bc)
+#  "Index I(b/a) is known, find I(a/b)"                   invert_index(i_ba)
+#
+#  "Real value of a nominal amount" (deflation)
+#       deflate(1000, 1.35)                   # CPI 135%: 1000 of the year t -> base year
+#       deflate(1000, 135, percent = TRUE)    # the same, typing the CPI as a percentage
+#       deflate(c(100,110,120), c(100,104,109), labels = 2020:2022)   # a whole series
+#  "The salary grew 50% and the CPI doubled: how much did it really grow?"
+#  "The CPI of 1998 with respect to 1990 is 135 %: real value in 1990 of 1000 of 1998, and in 1998 of 1000 of 1990"
+#       cpi_conversion(cpi = 135, amount = 1000, year = 1998, base = 1990)   # BOTH directions
+#       real_change(nominal_change = 50, cpi_change = 100)   # inputs in %
+#       real_salary(salary_pct = 50, cpi_pct = 100)          # THE EASIEST: the whole exercise
+#       real_salary(salary_pct = 50, cpi_pct = 100, years = 10)   # + average yearly change
+#       real_salary(salary = c(1000,1200,1500), cpi = c(100,110,130), labels = 1970:1972)  # a table
+#       (CPI "doubled" = 100, "tripled" = 200, "grew 30 %" = 30, "fell 10 %" = -10)
+#
+#  TYPICAL MISTAKES: write quarterly tables ROW BY ROW (byrow = TRUE) |
+#  use the right `period` (4 quarters, 12 months) | in deflate(), the CPI is
+#  I(t/base): to bring a value of the base year to year t use invert_index().
+#
+#  INDEX (in order of the slides)
+#  -------------------------------
+#  0. MAIN FUNCTIONS (one call = full answer)
+#       moving_average, trend_line, decompose_series, time_series_components,
+#       time_series_steps, seasonal_indices,
+#       autocorrelation,
+#       index_numbers, simple_index, deflate, real_change, real_salary, cpi_conversion
+#  1. INDEX NUMBER PROPERTIES
+#       invert_index, chain_index
 # =============================================================================
 
-if (!exists("describe_data") && file.exists("formulas_chapter1.R")) {
-  source("formulas_chapter1.R")      # loads Chapter 1 automatically if it is in the same folder
-}
-if (!exists("arithmetic_mean") || !exists("variance") || !exists("describe_data")) {
-  stop("Chapter 2 needs Chapter 1's functions. Run this first:\n",
-       '  source("formulas_chapter1.R")\n',
-       "and only then source this Chapter 2 file.")
+if (!exists("report_title") || !exists("full_digits")) {
+  ch1 <- Filter(file.exists, c("formulas_chapter1.R", "chapter_1/formulas_chapter1.R", "../chapter_1/formulas_chapter1.R"))
+  if (length(ch1) > 0) {
+    source(ch1[1])
+  } else {
+    stop("Chapter 3 needs Chapter 1's functions. Run this first:\n",
+         '  source("formulas_chapter1.R")\n',
+         "and only then source this Chapter 3 file.")
+  }
 }
 
 # Box helpers (they live in formulas_chapter1.R; defined here too so this file never fails
@@ -161,2205 +146,1511 @@ if (!exists("answer_box")) answer_box <- function(lines) {
 }
 if (!exists("box_line")) box_line <- function(label, value) paste0(label, " = ", paste(full_digits(value), collapse = ", "))
 if (!exists("final_box")) final_box <- function(title, lines) answer_box(c(paste0(">>> ", title), "", lines))
-
-# -----------------------------------------------------------------------------
-# FULL PRECISION (no rounding anywhere)
-# -----------------------------------------------------------------------------
-# No function in this file rounds its result. But R itself only DISPLAYS 7
-# significant digits by default, so this line makes R display up to 15 for
-# everything you print in this session (the same line as in Chapter 1).
 options(digits = 15)
-
-# INTERNAL HELPERS (you do not need to call these yourself): write numbers
-# with ALL their digits (up to 15 significant), never rounded to 4 decimals.
-# (full_digits() is defined in Chapter 1, which this file requires)
-# the same, but with " + " or " - " in front (so we never print "+ -0.8")
-signed_full <- function(v) {
-  paste0(ifelse(v < 0, " - ", " + "), full_digits(abs(v)))
-}
-
-# -----------------------------------------------------------------------------
-# print.stat_fit(x, ...)     [you never call this yourself]
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : Every fitting function in this file (regression_y_on_x(),
-#                regression_x_on_y(), fit_exponential(), fit_hyperbolic(),
-#                fit_power()) returns a small list tagged as a "stat_fit".
-#                This teaches R how to print that list in a readable way —
-#                instead of just dumping $a and $b with no context, it shows
-#                what was fitted and the equation with the numbers filled
-#                in. It runs AUTOMATICALLY whenever you print one of those
-#                results (by typing the model's name, or not assigning the
-#                function's result to anything) — you never call it by hand.
-# EXAMPLE      :
-#   regression_y_on_x(c(1,2,3,4,5), c(1,1,2,2,4))
-#   # Regression line R_Y/X (predicts Y from X)
-#   #   y = -0.0999999999999996 + 0.7 * x
-#   #   intercept (a) = -0.0999999999999996
-#   #   slope     (b) = 0.7
-#   # (the intercept is -0.1 up to the tiny error of floating-point numbers)
-# -----------------------------------------------------------------------------
-print.stat_fit <- function(x, ...) {
-  labels <- if (!is.null(x$labels)) x$labels else c("a", "b")
-  cat(x$description, "\n")
-  cat("  ", x$equation, "\n\n", sep = "")
-  cat(sprintf("  %-14s= %s\n", labels[1], full_digits(x$a)))
-  cat(sprintf("  %-14s= %s\n", labels[2], full_digits(x$b)))
-  if (is.function(x$report)) x$report()
-  final_box(x$description, c(
-    x$equation,
-    box_line(labels[1], x$a),
-    box_line(labels[2], x$b),
-    if (!is.null(x$r_squared)) box_line("R^2", x$r_squared),
-    if (!is.null(x$mse)) box_line("MSE", x$mse)))
-  invisible(x)
-}
-
-
-# =============================================================================
-# 1. JOINT (TWO-WAY) FREQUENCY TABLES
-# =============================================================================
-
-# -----------------------------------------------------------------------------
-# joint_absolute_table(x, y)
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : Builds the two-way table of absolute frequencies from two
-#                RAW paired observation vectors: how many times each pair
-#                of values occurred together. Rows = categories of X,
-#                columns = categories of Y.
-# PARAMETERS   :
-#   x : vector with the X value of every observation.
-#   y : vector with the Y value of every observation (same length as x;
-#       x[i] and y[i] are observed TOGETHER on the same individual).
-# RETURNS      : A matrix of counts, with row names = the values of X and
-#                column names = the values of Y.
-# EXAMPLE      :  (checks C and errors E on 20 software builds)
-#   C <- c(0,1,1,0,1,0,1,1,1,1,1,0,1,0,1,1,2,0,1,2)
-#   E <- c(0,1,1,1,1,1,1,1,0,0,1,1,1,0,0,0,0,1,1,0)
-#   joint_absolute_table(C, E)
-# -----------------------------------------------------------------------------
-joint_absolute_table <- function(x, y) {
-  as.matrix(table(x, y))
-}
-
-# -----------------------------------------------------------------------------
-# joint_relative_table(table_abs)
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : Turns a table of absolute frequencies into a table of
-#                relative frequencies (each cell divided by the grand total),
-#                so the whole table adds up to 1.
-# PARAMETERS   :
-#   table_abs : a matrix of absolute frequencies, e.g. from
-#               joint_absolute_table() or typed in by hand.
-# RETURNS      : A matrix the same shape as `table_abs`, with proportions.
-# EXAMPLE      :
-#   tab <- matrix(c(2,4,1,0,4,6, 0,0,3,1,0,0), nrow = 3, byrow = TRUE)
-#   joint_relative_table(tab)
-# -----------------------------------------------------------------------------
-joint_relative_table <- function(table_abs) {
-  table_abs / sum(table_abs)
-}
-
-# -----------------------------------------------------------------------------
-# table_to_pairs(table_abs, x_values, y_values)
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : Converts a two-way frequency table into the (x, y, n) long
-#                format that every other function in this file expects: one
-#                entry per non-empty cell, with the X value, the Y value,
-#                and how many times that pair occurred. You give the actual
-#                numeric value each row and each column represents (for
-#                grouped/continuous variables, use the class marks).
-# PARAMETERS   :
-#   table_abs : matrix of absolute frequencies (rows = X, columns = Y).
-#   x_values  : numeric vector with the value each ROW represents (its
-#               category, or its class mark if X is grouped into intervals).
-#               Must have as many entries as `table_abs` has rows.
-#   y_values  : numeric vector with the value each COLUMN represents. Must
-#               have as many entries as `table_abs` has columns.
-# RETURNS      : A list with three vectors of the same length: $x, $y, $n.
-# EXAMPLE      :  (height/weight table from the slides)
-#   tab <- matrix(c(
-#     2,0,0,0,0,0,
-#     4,4,0,0,0,0,
-#     1,6,3,1,0,0,
-#     0,1,4,1,1,0,
-#     0,0,0,0,1,1), nrow = 5, byrow = TRUE)
-#   height_marks <- class_mark(c(150,160,170,180,190), c(160,170,180,190,200))
-#   weight_marks <- class_mark(c(50,60,70,80,90,100), c(60,70,80,90,100,110))
-#   pairs <- table_to_pairs(tab, height_marks, weight_marks)
-#   bivariate_mean(pairs$x, pairs$y, pairs$n)
-# -----------------------------------------------------------------------------
-table_to_pairs <- function(table_abs, x_values, y_values) {
-  if (nrow(table_abs) != length(x_values))
-    stop("`x_values` must have one entry per ROW of `table_abs`.")
-  if (ncol(table_abs) != length(y_values))
-    stop("`y_values` must have one entry per COLUMN of `table_abs`.")
-  list(x = rep(x_values, times = ncol(table_abs)),
-       y = rep(y_values, each  = nrow(table_abs)),
-       n = as.vector(table_abs))
-}
-
-# -----------------------------------------------------------------------------
-# marginal_absolute_x(table_abs)
-# marginal_absolute_y(table_abs)
-# -----------------------------------------------------------------------------
-# WHAT THEY DO : The marginal (one-variable) absolute frequency distribution
-#                of X (adding up each ROW) or of Y (adding up each COLUMN),
-#                ignoring the other variable.
-# PARAMETERS   :
-#   table_abs : matrix of absolute frequencies (rows = X, columns = Y).
-# RETURNS      : Named numeric vector: one total per row (for X) or per
-#                column (for Y).
-# EXAMPLE      :
-#   marginal_absolute_x(tab)   # how many observations at each X value
-#   marginal_absolute_y(tab)   # how many observations at each Y value
-# -----------------------------------------------------------------------------
-marginal_absolute_x <- function(table_abs) {
-  rowSums(table_abs)
-}
-marginal_absolute_y <- function(table_abs) {
-  colSums(table_abs)
-}
-
-# -----------------------------------------------------------------------------
-# marginal_relative_x(table_abs)
-# marginal_relative_y(table_abs)
-# -----------------------------------------------------------------------------
-# WHAT THEY DO : Same as above, but as proportions of the grand total instead
-#                of counts.
-# PARAMETERS   :
-#   table_abs : matrix of absolute frequencies.
-# RETURNS      : Named numeric vector of proportions (adds up to 1).
-# EXAMPLE      :
-#   marginal_relative_x(tab)
-# -----------------------------------------------------------------------------
-marginal_relative_x <- function(table_abs) {
-  marginal_absolute_x(table_abs) / sum(table_abs)
-}
-marginal_relative_y <- function(table_abs) {
-  marginal_absolute_y(table_abs) / sum(table_abs)
-}
-
-# -----------------------------------------------------------------------------
-# conditional_relative_y_given_x(table_abs, x_index)
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : The distribution of Y when we only look at the individuals
-#                that have a particular value of X (one ROW of the table),
-#                as proportions of that row's own total (they add up to 1).
-#                This is the distribution written "Y / x_i" in the slides.
-# PARAMETERS   :
-#   table_abs : matrix of absolute frequencies (rows = X, columns = Y).
-#   x_index   : which row to look at: either the row NUMBER (1, 2, 3, ...)
-#               or, if the table has row names, the row's name (as text).
-# RETURNS      : Named numeric vector of proportions, one per value of Y.
-# EXAMPLE      :
-#   conditional_relative_y_given_x(tab, 1)     # distribution of Y given X = row 1
-# -----------------------------------------------------------------------------
-conditional_relative_y_given_x <- function(table_abs, x_index) {
-  row <- table_abs[x_index, ]
-  row / sum(row)
-}
-
-# -----------------------------------------------------------------------------
-# conditional_relative_x_given_y(table_abs, y_index)
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : The distribution of X when we only look at the individuals
-#                that have a particular value of Y (one COLUMN of the
-#                table), as proportions of that column's own total. This is
-#                the distribution written "X / y_j" in the slides.
-# PARAMETERS   :
-#   table_abs : matrix of absolute frequencies (rows = X, columns = Y).
-#   y_index   : which column to look at: either the column NUMBER, or,
-#               if the table has column names, the column's name (as text).
-# RETURNS      : Named numeric vector of proportions, one per value of X.
-# EXAMPLE      :
-#   conditional_relative_x_given_y(tab, 2)     # distribution of X given Y = column 2
-# -----------------------------------------------------------------------------
-conditional_relative_x_given_y <- function(table_abs, y_index) {
-  col <- table_abs[, y_index]
-  col / sum(col)
-}
-
-# -----------------------------------------------------------------------------
-# is_independent(table_abs, tolerance = 1e-8)
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : Checks whether X and Y are INDEPENDENT: this holds exactly
-#                when every joint relative frequency equals the product of
-#                its two marginal relative frequencies (f_ij = f_i. * f._j
-#                for every cell). Because of rounding, you decide how close
-#                counts as "equal" with `tolerance`.
-# PARAMETERS   :
-#   table_abs : matrix of absolute frequencies (rows = X, columns = Y).
-#   tolerance : how far apart f_ij and f_i.*f._j may be and still count as
-#               equal (default 1e-8, i.e. must match almost exactly).
-# RETURNS      : TRUE or FALSE. Also prints the largest discrepancy found,
-#                so you can see how close (or far) the table is from
-#                independence even when the answer is FALSE.
-# EXAMPLE      :
-#   tab <- matrix(c(1,3,2,4, 3,9,6,12, 2,6,4,8), nrow = 3, byrow = TRUE)
-#   is_independent(tab)   # TRUE: every row is proportional to every other
-# -----------------------------------------------------------------------------
-is_independent <- function(table_abs, tolerance = 1e-8) {
-  N <- sum(table_abs)
-  fij      <- table_abs / N
-  expected <- outer(marginal_relative_x(table_abs), marginal_relative_y(table_abs))
-  max_diff <- max(abs(fij - expected))
-  cat("Largest difference between f_ij and (f_i. * f._j):", max_diff, "\n")
-  max_diff <= tolerance
-}
-
-
-# =============================================================================
-# 2. CENTRE OF GRAVITY, MOMENTS AND COVARIANCE
-# =============================================================================
-
-# -----------------------------------------------------------------------------
-# bivariate_mean(x, y, n = NULL)
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : The mean of X and the mean of Y together: the "centre of
-#                gravity" (m10, m01) of the bivariate data. Every regression
-#                line passes through this point.
-# PARAMETERS   :
-#   x : the X value of each pair (or the different X values, if using `n`).
-#   y : the Y value of each pair (same length as x).
-#   n : (optional) how many times each pair (x, y) appears (its frequency).
-#       Leave empty for raw, one-row-per-observation data.
-# RETURNS      : Named numeric vector c(mean_x = ..., mean_y = ...).
-# EXAMPLE      :
-#   bivariate_mean(c(1,2,3,4,5), c(1,1,2,2,4))    # mean_x = 3, mean_y = 2
-# -----------------------------------------------------------------------------
-bivariate_mean <- function(x, y, n = NULL) {
-  c(mean_x = arithmetic_mean(x, n), mean_y = arithmetic_mean(y, n))
-}
-
-# -----------------------------------------------------------------------------
-# moment_xy(x, y, n = NULL, r, s, a = 0, b = 0)
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : The general bivariate moment of order (r, s) with respect to
-#                a reference point (a, b): the average, over all the data, of
-#                (X - a) raised to the power r, multiplied by (Y - b) raised
-#                to the power s.
-# FORMULA (for reference — matches the slides' notation):
-#   M_rs(a, b) = sum( (x_i - a)^r * (y_j - b)^s * n_ij ) / N
-# PARAMETERS   :
-#   x, y : the X and Y value of each pair.
-#   n    : (optional) how many times each pair appears.
-#   r    : the power applied to (X - a).
-#   s    : the power applied to (Y - b).
-#   a    : the reference point for X (default 0).
-#   b    : the reference point for Y (default 0).
-# RETURNS      : One number.
-# EXAMPLE      :  (communication-time example: M12 about the point (3, 2))
-#   moment_xy(t_values, d_values, n_values, r = 1, s = 2, a = 3, b = 2)
-# -----------------------------------------------------------------------------
-moment_xy <- function(x, y, n = NULL, r, s, a = 0, b = 0) {
-  n <- if (is.null(n)) rep(1, length(x)) else n
-  sum(n * (x - a)^r * (y - b)^s) / sum(n)
-}
-
-# -----------------------------------------------------------------------------
-# ordinary_moment_xy(x, y, n = NULL, r, s)
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : The bivariate moment of order (r, s) about the point (0, 0).
-#                m10 is the mean of X, m01 is the mean of Y, m00 is always 1.
-# PARAMETERS   : same as moment_xy(), without `a`/`b` (they are fixed at 0).
-# RETURNS      : One number.
-# EXAMPLE      :
-#   ordinary_moment_xy(c(1,2,3), c(2,4,6), r = 1, s = 1)
-# -----------------------------------------------------------------------------
-ordinary_moment_xy <- function(x, y, n = NULL, r, s) {
-  moment_xy(x, y, n, r, s, a = 0, b = 0)
-}
-
-# -----------------------------------------------------------------------------
-# central_moment_xy(x, y, n = NULL, r, s)
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : The bivariate moment of order (r, s) about the point
-#                (mean of X, mean of Y). mu_20 is the variance of X, mu_02
-#                is the variance of Y, and mu_11 is the covariance of X
-#                and Y.
-# PARAMETERS   : same as moment_xy(), without `a`/`b` (they are computed
-#                automatically as the means of x and y).
-# RETURNS      : One number.
-# EXAMPLE      :
-#   x <- c(1,2,3,4,5); y <- c(1,1,2,2,4)
-#   central_moment_xy(x, y, r = 2, s = 0)   # equals variance(x)
-#   central_moment_xy(x, y, r = 1, s = 1)   # equals covariance(x, y)
-# -----------------------------------------------------------------------------
-central_moment_xy <- function(x, y, n = NULL, r, s) {
-  mean_x <- arithmetic_mean(x, n)
-  mean_y <- arithmetic_mean(y, n)
-  moment_xy(x, y, n, r, s, a = mean_x, b = mean_y)
-}
-
-# -----------------------------------------------------------------------------
-# covariance(x, y, n = NULL)
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : The covariance of X and Y: it measures whether X and Y tend
-#                to move together (positive), move in opposite directions
-#                (negative), or show no linear tendency (close to zero).
-#                It is the average of (X - mean of X) times (Y - mean of Y).
-# FORMULA (for reference — matches the slides' notation):
-#   Cov(X, Y) = mu_11 = sum( (x_i - x_bar)(y_j - y_bar) * n_ij ) / N
-# PARAMETERS   :
-#   x : the X value of each pair.
-#   y : the Y value of each pair.
-#   n : (optional) how many times each pair appears.
-# RETURNS      : One number. Positive = direct relationship, negative =
-#                inverse relationship, (close to) zero = uncorrelated.
-# EXAMPLE      :
-#   covariance(c(1,2,3,4,5), c(1,1,2,2,4))
-# -----------------------------------------------------------------------------
-covariance <- function(x, y, n = NULL) {
-  central_moment_xy(x, y, n, r = 1, s = 1)
-}
-
-# -----------------------------------------------------------------------------
-# covariance_shortcut(x, y, n = NULL)
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : The same covariance, computed with the equivalent
-#                "shortcut" formula from the slides (mean of the products
-#                minus the product of the means). Gives the same result as
-#                covariance(); useful to double-check a hand calculation.
-# FORMULA (for reference — matches the slides' notation):
-#   Cov(X, Y) = mean(X * Y) - mean(X) * mean(Y)
-# PARAMETERS   : same as covariance().
-# RETURNS      : One number (same result as covariance()).
-# EXAMPLE      :
-#   covariance_shortcut(c(1,2,3,4,5), c(1,1,2,2,4))
-# -----------------------------------------------------------------------------
-covariance_shortcut <- function(x, y, n = NULL) {
-  ordinary_moment_xy(x, y, n, r = 1, s = 1) - arithmetic_mean(x, n) * arithmetic_mean(y, n)
-}
-
-
-# =============================================================================
-# 3. SIMPLE LINEAR REGRESSION AND CORRELATION
-# =============================================================================
-
-# -----------------------------------------------------------------------------
-# regression_y_on_x(x, y, n = NULL)
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : Fits the straight line that best predicts Y FROM X, in the
-#                least-squares sense (this line is written R_Y/X in the
-#                slides): y = a + b * x. Use this when Y is the variable you
-#                want to predict/explain and X is the predictor.
-# FORMULA (for reference — matches the slides' notation):
-#   b = Cov(X, Y) / Var(X)          a = mean(Y) - b * mean(X)
-# PARAMETERS   :
-#   x : the X value of each pair (the predictor).
-#   y : the Y value of each pair (the variable to predict).
-#   n : (optional) how many times each pair appears.
-# RETURNS      : A list you can print directly to see a readable summary
-#                (it prints as "Regression line R_Y/X ... y = a + b*x" with
-#                a and b filled in). It has:
-#                  $a         — the intercept.
-#                  $b         — the slope: how much Y changes per one-unit
-#                               increase in X. This is usually the number
-#                               that matters for interpretation.
-#                  $intercept — the same value as $a, under a clearer name.
-#                  $slope     — the same value as $b, under a clearer name.
-#                  $equation  — the fitted line as readable text, e.g.
-#                               "y = -107.8202 + 1.0161 * x".
-#                The line always passes through (mean of X, mean of Y).
-# EXAMPLE      :
-#   model <- regression_y_on_x(c(1,2,3,4,5), c(1,1,2,2,4))
-#   model                      # prints a readable summary
-#   model$slope                # 0.9 (just the number you usually want)
-#   predict_linear(model$a, model$b, x_new = 6)
-# -----------------------------------------------------------------------------
-regression_y_on_x <- function(x, y, n = NULL) {
-  b <- covariance(x, y, n) / variance(x, n)
-  a <- arithmetic_mean(y, n) - b * arithmetic_mean(x, n)
-  structure(list(
-    a = a, b = b, intercept = a, slope = b,
-    equation = paste0("y = ", full_digits(a), signed_full(b), " * x"),
-    description = "Regression line R_Y/X (predicts Y from X)",
-    labels = c("intercept (a)", "slope     (b)")
-  ), class = "stat_fit")
-}
-
-# -----------------------------------------------------------------------------
-# regression_x_on_y(x, y, n = NULL)
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : Fits the straight line that best predicts X FROM Y, in the
-#                least-squares sense (this line is written R_X/Y in the
-#                slides): x = a + b * y. This is generally a DIFFERENT line
-#                from regression_y_on_x() — solving that one for x does not
-#                give you this one.
-# FORMULA (for reference — matches the slides' notation):
-#   b = Cov(X, Y) / Var(Y)          a = mean(X) - b * mean(Y)
-# PARAMETERS   :
-#   x : the X value of each pair (the variable to predict here).
-#   y : the Y value of each pair (the predictor here).
-#   n : (optional) how many times each pair appears.
-# RETURNS      : A list you can print directly to see a readable summary
-#                (it prints as "Regression line R_X/Y ... x = a + b*y" with
-#                a and b filled in). It has:
-#                  $a         — the intercept.
-#                  $b         — the slope: how much X changes per one-unit
-#                               increase in Y.
-#                  $intercept — the same value as $a, under a clearer name.
-#                  $slope     — the same value as $b, under a clearer name.
-#                  $equation  — the fitted line as readable text, e.g.
-#                               "x = 130.3504 + 0.6361 * y".
-#                The line also passes through (mean of X, mean of Y).
-# EXAMPLE      :
-#   model <- regression_x_on_y(c(1,2,3,4,5), c(1,1,2,2,4))
-#   model                      # prints a readable summary
-#   predict_linear(model$a, model$b, x_new = 3)   # predicts X from Y = 3
-# -----------------------------------------------------------------------------
-regression_x_on_y <- function(x, y, n = NULL) {
-  b <- covariance(x, y, n) / variance(y, n)
-  a <- arithmetic_mean(x, n) - b * arithmetic_mean(y, n)
-  structure(list(
-    a = a, b = b, intercept = a, slope = b,
-    equation = paste0("x = ", full_digits(a), signed_full(b), " * y"),
-    description = "Regression line R_X/Y (predicts X from Y)",
-    labels = c("intercept (a)", "slope     (b)")
-  ), class = "stat_fit")
-}
-
-# -----------------------------------------------------------------------------
-# predict_linear(a, b, x_new)
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : Uses a straight-line model (from regression_y_on_x(),
-#                regression_x_on_y(), or any a + b*value model) to predict
-#                new values.
-# FORMULA (for reference — matches the slides' notation):
-#   predicted = a + b * x_new
-# PARAMETERS   :
-#   a     : the intercept of the line.
-#   b     : the slope of the line.
-#   x_new : the value(s) to plug into the line (one number or a vector).
-# RETURNS      : The predicted value(s).
-# EXAMPLE      :
-#   model <- regression_y_on_x(c(1,2,3,4,5), c(1,1,2,2,4))
-#   predict_linear(model$a, model$b, x_new = c(6, 7))
-# -----------------------------------------------------------------------------
-predict_linear <- function(a, b, x_new) {
-  a + b * x_new
-}
-
-# -----------------------------------------------------------------------------
-# pearson_correlation(x, y, n = NULL)
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : Pearson's linear correlation coefficient (r): it measures
-#                the strength AND direction of the straight-line relationship
-#                between X and Y, on a scale that does not depend on units.
-#                r = 0 means no linear relationship; r = 1 or r = -1 means a
-#                perfect straight-line relationship (direct or inverse).
-# FORMULA (for reference — matches the slides' notation):
-#   r = Cov(X, Y) / (sd(X) * sd(Y))          (always between -1 and 1)
-# PARAMETERS   :
-#   x : the X value of each pair.
-#   y : the Y value of each pair.
-#   n : (optional) how many times each pair appears.
-# RETURNS      : One number between -1 and 1.
-# EXAMPLE      :
-#   pearson_correlation(c(1,2,3,4,5), c(1,1,2,2,4))   # 0.9701425
-# -----------------------------------------------------------------------------
-pearson_correlation <- function(x, y, n = NULL) {
-  covariance(x, y, n) / (standard_deviation(x, n) * standard_deviation(y, n))
-}
-
-# -----------------------------------------------------------------------------
-# r_squared_from_slopes(slope_y_on_x, slope_x_on_y)
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : A quick check / shortcut from the slides: the square of the
-#                correlation coefficient (r^2) always equals the product of
-#                the two regression lines' slopes (b from R_Y/X times b from
-#                R_X/Y). Handy to verify your two regressions are consistent
-#                with each other, without recomputing r from scratch.
-# FORMULA (for reference — matches the slides' notation):
-#   r^2 = b * b'
-# PARAMETERS   :
-#   slope_y_on_x : the slope (b) of the regression of Y on X.
-#   slope_x_on_y : the slope (b') of the regression of X on Y.
-# RETURNS      : One number: r^2 (should match pearson_correlation(...)^2).
-# EXAMPLE      :
-#   my <- regression_y_on_x(c(1,2,3,4,5), c(1,1,2,2,4))
-#   mx <- regression_x_on_y(c(1,2,3,4,5), c(1,1,2,2,4))
-#   r_squared_from_slopes(my$b, mx$b)
-# -----------------------------------------------------------------------------
-r_squared_from_slopes <- function(slope_y_on_x, slope_x_on_y) {
-  slope_y_on_x * slope_x_on_y
-}
-
-
-# =============================================================================
-# 4. GOODNESS OF FIT (works for ANY fitted model: linear, exponential, ...)
-# =============================================================================
-
-# -----------------------------------------------------------------------------
-# sse_fit(actual, predicted, n = NULL)
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : The Sum of Squared Errors (SSE) of a fitted model: how far
-#                the model's predictions are from the real values, added up
-#                after squaring each difference (so positive and negative
-#                errors don't cancel out). Smaller is better.
-# FORMULA (for reference — matches the slides' notation):
-#   SSE = sum( (actual_i - predicted_i)^2 * n_i )
-# PARAMETERS   :
-#   actual    : the real observed values (e.g. the y you measured).
-#   predicted : the values your model predicted for the same points.
-#   n         : (optional) how many times each (actual, predicted) pair
-#               repeats. Leave empty for raw data.
-# RETURNS      : One number (0 or more). 0 means a perfect fit.
-# EXAMPLE      :
-#   sse_fit(actual = c(2,3,4,5), predicted = c(2.2,2.8,4.1,4.9))
-# -----------------------------------------------------------------------------
-sse_fit <- function(actual, predicted, n = NULL) {
-  n <- if (is.null(n)) rep(1, length(actual)) else n
-  sum(n * (actual - predicted)^2)
-}
-
-# -----------------------------------------------------------------------------
-# mse_fit(actual, predicted, n = NULL)
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : The Mean Squared Error (MSE) of a fitted model: the average
-#                of the squared errors (the SSE divided by how many data
-#                points there are). Smaller is better; 0 means a perfect fit.
-# FORMULA (for reference — matches the slides' notation):
-#   MSE = SSE / N
-# PARAMETERS   : same as sse_fit().
-# RETURNS      : One number (0 or more).
-# EXAMPLE      :
-#   mse_fit(actual = c(2,3,4,5), predicted = c(2.2,2.8,4.1,4.9))
-# -----------------------------------------------------------------------------
-mse_fit <- function(actual, predicted, n = NULL) {
-  n <- if (is.null(n)) rep(1, length(actual)) else n
-  sse_fit(actual, predicted, n) / sum(n)
-}
-
-# -----------------------------------------------------------------------------
-# r_squared_fit(actual, predicted, n = NULL)
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : The coefficient of determination (R^2): how much better the
-#                model's predictions are than just always predicting the
-#                mean. R^2 = 1 is a perfect fit, R^2 = 0 means the model
-#                explains nothing (no better than the mean), and R^2 CAN be
-#                negative if the model fits worse than a flat horizontal
-#                line at the mean.
-# FORMULA (for reference — matches the slides' notation):
-#   R^2 = 1 - MSE / Var(actual)
-# PARAMETERS   :
-#   actual    : the real observed values.
-#   predicted : the values your model predicted for the same points.
-#   n         : (optional) how many times each pair repeats.
-# RETURNS      : One number, at most 1 (can be negative for a bad model).
-# EXAMPLE      :
-#   r_squared_fit(actual = c(2,3,4,5), predicted = c(2.2,2.8,4.1,4.9))
-# -----------------------------------------------------------------------------
-r_squared_fit <- function(actual, predicted, n = NULL) {
-  1 - mse_fit(actual, predicted, n) / variance(actual, n)
-}
-
-# -----------------------------------------------------------------------------
-# variance_explained_fit(actual, predicted, n = NULL)
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : The portion of the total variance of the real data that the
-#                model "explains" (accounts for). Together with the MSE
-#                (the unexplained portion), it adds up to the total
-#                variance of the real data.
-# FORMULA (for reference — matches the slides' notation):
-#   Variance explained = R^2 * Var(actual)
-#   Var(actual) = MSE + Variance explained
-# PARAMETERS   : same as r_squared_fit().
-# RETURNS      : One number. It is NOT itself a variance, so it can be
-#                negative when the model fits worse than the mean.
-# EXAMPLE      :
-#   variance_explained_fit(actual = c(2,3,4,5), predicted = c(2.2,2.8,4.1,4.9))
-# -----------------------------------------------------------------------------
-variance_explained_fit <- function(actual, predicted, n = NULL) {
-  r_squared_fit(actual, predicted, n) * variance(actual, n)
-}
-
-
-# -----------------------------------------------------------------------------
-# mse_of_model(model, data = NULL, n = NULL)
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : Gives the MSE (mean squared error) of a model in ONE call,
-#                and it works in the two situations of the exam:
-#                (1) The statement does NOT give the numbers: you write the
-#                    model with letters, e.g. "y = a*e^(b*x)", and it first
-#                    finds a and b by least squares and then gives the MSE
-#                    (you never need to know a and b).
-#                (2) The statement GIVES the equation with numbers, e.g.
-#                    "y = 5.88*e^(-0.13*x)": it just measures its error.
-#                It prints the coefficients (if it had to find them), SSE,
-#                MSE, RMSE, the variance of the response and R^2.
-# FORMULA (for reference — matches the slides' notation):
-#   MSE = sum( n_i * (y_i - prediction_i)^2 ) / N
-# PARAMETERS   :
-#   model : the model as text. The variable before "=" is the real one. Any
-#           letter that is not a data variable is an unknown to find (a, b, c).
-#           e means Euler's number. Examples: "y = a + b*x",
-#           "y = a*e^(b*x)", "y = 1/(a + b*x)", "y = a*x^2 + b*x + c",
-#           "y = 3 + 0.5*x" (all numbers given).
-#   data  : optional data.frame / list with the variables.
-#   n     : optional frequencies of each observation.
-# RETURNS      : Invisibly, a list with $mse, $sse, $rmse, $r_squared,
-#                $coefficients (if any were found), $predicted, $residuals.
-# EXAMPLE      :
-#   x <- c(0,1,2,3,6); y <- c(7,5,4,3.5,3)
-#   mse_of_model("y = a*e^(b*x)")        # MSE = 0.3755023843...
-#   mse_of_model("y = 5.88*e^(-0.13*x)") # same, with the numbers given
-# -----------------------------------------------------------------------------
-mse_of_model <- function(model, data = NULL, n = NULL) {
-  caller <- parent.frame()
-  env <- if (is.null(data)) caller else list2env(as.list(data), parent = caller)
-  sides <- strsplit(model, "=", fixed = TRUE)[[1]]
-  if (length(sides) != 2) stop('Write the model with exactly one "=", e.g. "y = a + b*x".')
-  resp_name <- trimws(sides[1])
-  real <- get0(resp_name, envir = env, mode = "numeric")
-  if (is.null(real)) stop("I can't find the variable `", resp_name, "` in your workspace or in `data`.")
-  N <- length(real)
-  if (!is.null(n) && length(n) != N) stop("`n` must have the same length as the data.")
-  rhs <- parse(text = sides[2])[[1]]
-  if (is.null(get0("e", envir = env, mode = "numeric")))     # e = Euler's number
-    rhs <- do.call(substitute, list(rhs, list(e = exp(1))))
-  syms <- setdiff(all.vars(rhs), "pi")
-  is_data <- vapply(syms, function(z) {
-    v <- get0(z, envir = env, mode = "numeric"); !is.null(v) && length(v) == N
-  }, logical(1))
-  unknown <- syms[!is_data]
-  coefs <- NULL
-  if (length(unknown) > 0) {
-    vars <- setNames(lapply(c(resp_name, syms[is_data]), function(z) get(z, envir = env)),
-                     c(resp_name, syms[is_data]))
-    fit <- fit_model(model, data = vars, n = n, plot = FALSE)
-    predicted <- fit$fitted; coefs <- fit$coefficients
-  } else {
-    predicted <- rep_len(as.numeric(eval(rhs, env)), N)
-  }
-  sse <- sse_fit(real, predicted, n); mse <- mse_fit(real, predicted, n)
-  r2 <- r_squared_fit(real, predicted, n)
-  report_title(paste0("MSE OF THE MODEL:  ", model))
-  if (!is.null(coefs)) {
-    report_section("Unknown coefficients (found first by least squares)")
-    for (k in seq_along(coefs)) report_line(names(coefs)[k], coefs[k])
-  }
-  report_section("Error of the model")
-  report_line("N (number of observations)", sum(freq_or_ones(real, n)))
-  report_line("SSE (sum of squared errors)", sse)
-  report_line("MSE (mean squared error = SSE / N)", mse)
-  report_line(paste0("RMSE (typical error, in the units of ", resp_name, ")"), sqrt(mse))
-  report_line(paste0("Variance of ", resp_name, " (divides by N)"), variance(real, n))
-  report_line("R^2 = 1 - MSE / variance", r2)
-  final_box(paste0("MSE OF THE MODEL:  ", model), c(
-    if (!is.null(coefs)) vapply(seq_along(coefs), function(k) box_line(names(coefs)[k], coefs[k]), character(1)),
-    box_line("SSE", sse),
-    box_line("MSE", mse),
-    box_line("RMSE", sqrt(mse)),
-    box_line("R^2", r2)))
-  invisible(list(mse = mse, sse = sse, rmse = sqrt(mse), r_squared = r2,
-                 coefficients = coefs, predicted = predicted, residuals = real - predicted))
-}
-
-
-# -----------------------------------------------------------------------------
-# INTERNAL: linearised_stats / report_linearised          (used by every fit that
-# works through a change of variable: exponential, hyperbolic, power)
-#   linearised_stats : fits the STRAIGHT LINE  Yt = A + B * Xt  (the transformed
-#       data) and returns A, B, the correlation r of the transformed data, r^2
-#       and the MSE of that straight line.
-#   report_linearised: prints it all in plain English.
-# -----------------------------------------------------------------------------
-linearised_stats <- function(Xt, Yt, n = NULL) {
-  B <- covariance(Xt, Yt, n) / variance(Xt, n)
-  A <- arithmetic_mean(Yt, n) - B * arithmetic_mean(Xt, n)
-  r <- covariance(Xt, Yt, n) / sqrt(variance(Xt, n) * variance(Yt, n))
-  list(A = A, B = B, r = r, r2 = r^2,
-       sse = sse_fit(Yt, A + B * Xt, n), mse = mse_fit(Yt, A + B * Xt, n))
-}
-
-report_linearised <- function(lin, line_text, A_text, B_text, back_text,
-                              resp, sse, mse, r2_original) {
-  report_section("Straight line after the change of variable")
-  cat("  ", line_text, "\n", sep = "")
-  report_line(A_text, lin$A)
-  report_line(B_text, lin$B)
-  for (b in back_text) report_line(b$label, b$value)
-  report_line("r (correlation coefficient of the transformed data)", lin$r)
-  report_line("MSE of the straight line (in transformed units)", lin$mse)
-  report_section(paste0("Goodness of the curve on the ORIGINAL ", resp, " values"))
-  report_line("SSE (sum of squared errors)", sse)
-  report_line("MSE (mean squared error = SSE / N)", mse)
-  report_line(paste0("RMSE (typical error, in the units of ", resp, ")"), sqrt(mse))
-  report_line(paste0("Variance of ", resp, " (Vy, divides by N)"), mse / (1 - r2_original))
-  report_line(paste0("R^2 OF THE COURSE = 1 - MSE / Vy"), r2_original)
-  
-}
-
-# INTERNAL: draws the data (point size = frequency) and the fitted curve
-plot_curve_fit <- function(x, y, n, grid, curve_y, title, label) {
-  size <- if (is.null(n)) rep(1, length(x)) else n
-  plot(x, y, pch = 19, col = "steelblue", cex = sqrt(size), xlab = "x", ylab = "y",
-       main = paste0("Fit: ", title), ylim = range(c(y, curve_y), finite = TRUE))
-  lines(grid, curve_y, col = "firebrick", lwd = 2)
-  legend("topleft", legend = c("data (size = frequency)", "fitted curve"),
-         col = c("steelblue", "firebrick"), pch = c(19, NA), lty = c(NA, 1), bty = "n")
-  invisible(NULL)
-}
-
-# =============================================================================
-# 5. NON-LINEAR FITS (turned into a straight line first, then fitted)
-# =============================================================================
-
-# -----------------------------------------------------------------------------
-# fit_exponential(x, y)
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : Fits a curve of the form y = a * e^(b*x) to your data. It
-#                works by taking the logarithm of y (which turns the curve
-#                into a straight line: ln(y) = ln(a) + b*x), fitting a
-#                regular straight line to (x, ln(y)), and converting the
-#                result back.
-# FORMULA (for reference — matches the slides' notation):
-#   ln(y) = ln(a) + b*x    (a straight line in x and ln(y))
-# PARAMETERS   :
-#   x : vector of X values (raw data; every y value must be positive,
-#       since the logarithm of a non-positive number does not exist).
-#   y : vector of Y values.
-#   n : (optional) how many times each pair appears.
-#   plot : TRUE (default) draws the data and the fitted curve; FALSE to skip.
-# RETURNS      : A list you can print directly for a readable summary
-#                ("Exponential fit y = a * e^(b*x) ... y = 5.8846 * e^(-0.1307*x)").
-#                It has $a and $b (the parameters), plus $equation (the
-#                fitted curve as readable text).
-# EXAMPLE      :
-#   x <- c(0, 1, 2, 3, 6); y <- c(7, 5, 4, 3.5, 3)
-#   model <- fit_exponential(x, y)
-#   model                                          # prints a readable summary
-#   model$a; model$b                              # a = 5.8846, b = -0.1307
-#   predicted <- predict_exponential(model$a, model$b, x)
-#   r_squared_fit(y, predicted)                    # 0.81225
-# -----------------------------------------------------------------------------
-fit_exponential <- function(x, y, n = NULL, plot = TRUE) {
-  Xt <- x; Yt <- log(y)
-  lin <- linearised_stats(Xt, Yt, n)
-  a <- exp(lin$A)
-  b <- lin$B
-  fitted <- a * exp(b * x)
-  sse <- sse_fit(y, fitted, n); mse <- mse_fit(y, fitted, n)
-  if (plot) {
-    g <- seq(min(x), max(x), length.out = 300)
-    plot_curve_fit(x, y, n, g, a * exp(b * g), "exponential", "y = ")
-  }
-  structure(list(
-    a = a, b = b, A = lin$A, B = lin$B, r = lin$r, r_squared_linear = lin$r2,
-    mse_linear = lin$mse, sse = sse, mse = mse, rmse = sqrt(mse),
-    r_squared = r_squared_fit(y, fitted, n), lin = lin,
-    equation = paste0("y = ", full_digits(a), " * e^(", full_digits(b), " * x)"),
-    description = "Exponential fit y = a * e^(b*x)",
-    labels = c("a", "b"),
-    report = function() report_linearised(lin, "ln(y) = A + B * x      with  A = ln(a)  and  B = b", "A = ln(a)  (intercept of the straight line)", "B = b  (slope of the straight line)",
-                                          list(list(label = "a", value = a), list(label = "b", value = b)),
-                                          "y", sse, mse, r_squared_fit(y, fitted, n))
-  ), class = "stat_fit")
-}
-
-# -----------------------------------------------------------------------------
-# predict_exponential(a, b, x_new)
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : Predicts y values from a fitted exponential model
-#                y = a * e^(b*x).
-# PARAMETERS   :
-#   a, b  : the parameters returned by fit_exponential().
-#   x_new : the X value(s) to predict at.
-# RETURNS      : The predicted y value(s).
-# EXAMPLE      :
-#   predict_exponential(5.8846, -0.1307, x_new = 4)
-# -----------------------------------------------------------------------------
-predict_exponential <- function(a, b, x_new) {
-  a * exp(b * x_new)
-}
-
-# -----------------------------------------------------------------------------
-# fit_hyperbolic(x, y)
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : Fits a curve of the form y = 1 / (a + b*x) to your data. It
-#                works by taking the reciprocal of y (which turns the curve
-#                into a straight line: 1/y = a + b*x), fitting a regular
-#                straight line to (x, 1/y), and reusing the result directly.
-# FORMULA (for reference — matches the slides' notation):
-#   1/y = a + b*x    (a straight line in x and 1/y)
-# PARAMETERS   :
-#   x : vector of X values (raw data).
-#   y : vector of Y values (none may be 0, since 1/0 does not exist).
-# RETURNS      : A list you can print directly for a readable summary. It
-#                has $a and $b (the parameters of y = 1 / (a + b*x)), plus
-#                $equation (the fitted curve as readable text).
-# EXAMPLE      :
-#   x <- c(0, 1, 2, 3, 6); y <- c(7, 5, 4, 3.5, 3)
-#   model <- fit_hyperbolic(x, y)
-#   model                                          # prints a readable summary
-#   model$a; model$b                              # a = 0.169, b = 0.0306
-#   # (the course slides print this as "b = -0.0306" and "y = 1/(0.169 -
-#   # 0.0306x)", but solving their own normal equations actually gives
-#   # b = +0.0306 — plugging that in is what reproduces their MSE and R^2)
-#   predicted <- predict_hyperbolic(model$a, model$b, x)
-#   r_squared_fit(y, predicted)                    # 0.85724
-# -----------------------------------------------------------------------------
-fit_hyperbolic <- function(x, y, n = NULL, plot = TRUE) {
-  Xt <- x; Yt <- 1 / y
-  lin <- linearised_stats(Xt, Yt, n)
-  a <- lin$A
-  b <- lin$B
-  fitted <- 1 / (a + b * x)
-  sse <- sse_fit(y, fitted, n); mse <- mse_fit(y, fitted, n)
-  if (plot) {
-    g <- seq(min(x), max(x), length.out = 300)
-    plot_curve_fit(x, y, n, g, 1 / (a + b * g), "hyperbolic", "y = ")
-  }
-  structure(list(
-    a = a, b = b, A = lin$A, B = lin$B, r = lin$r, r_squared_linear = lin$r2,
-    mse_linear = lin$mse, sse = sse, mse = mse, rmse = sqrt(mse),
-    r_squared = r_squared_fit(y, fitted, n), lin = lin,
-    equation = paste0("y = 1 / (", full_digits(a), signed_full(b), " * x)"),
-    description = "Hyperbolic fit y = 1 / (a + b*x)",
-    labels = c("a", "b"),
-    report = function() report_linearised(lin, "1/y = A + B * x      with  A = a  and  B = b", "A = a  (intercept of the straight line)", "B = b  (slope of the straight line)",
-                                          list(list(label = "a", value = a), list(label = "b", value = b)),
-                                          "y", sse, mse, r_squared_fit(y, fitted, n))
-  ), class = "stat_fit")
-}
-
-# -----------------------------------------------------------------------------
-# predict_hyperbolic(a, b, x_new)
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : Predicts y values from a fitted hyperbolic model
-#                y = 1 / (a + b*x).
-# PARAMETERS   :
-#   a, b  : the parameters returned by fit_hyperbolic().
-#   x_new : the X value(s) to predict at.
-# RETURNS      : The predicted y value(s).
-# EXAMPLE      :
-#   predict_hyperbolic(0.169, -0.0306, x_new = 4)
-# -----------------------------------------------------------------------------
-predict_hyperbolic <- function(a, b, x_new) {
-  1 / (a + b * x_new)
-}
-
-# -----------------------------------------------------------------------------
-# fit_power(x, y)
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : Fits a curve of the form y = a * x^b (a power law) to your
-#                data. It works the same way as the other two: taking
-#                logarithms of BOTH x and y turns the curve into a straight
-#                line (ln(y) = ln(a) + b*ln(x)), which is then fitted
-#                normally. Not explicitly named in the slides' formula list,
-#                but built the same way as fit_exponential() and
-#                fit_hyperbolic(), and it shows up in the exercises.
-# FORMULA (for reference):
-#   ln(y) = ln(a) + b*ln(x)    (a straight line in ln(x) and ln(y))
-# PARAMETERS   :
-#   x : vector of X values (all strictly positive).
-#   y : vector of Y values (all strictly positive).
-# RETURNS      : A list you can print directly for a readable summary. It
-#                has $a and $b (the parameters of y = a * x^b), plus
-#                $equation (the fitted curve as readable text).
-# EXAMPLE      :
-#   x <- c(1,2,3,4,5); y <- c(0.5,2.0,4.5,8.0,12.5)
-#   model <- fit_power(x, y)
-#   model                                          # prints a readable summary
-#   predicted <- predict_power(model$a, model$b, x)
-#   r_squared_fit(y, predicted)
-# -----------------------------------------------------------------------------
-fit_power <- function(x, y, n = NULL, plot = TRUE) {
-  Xt <- log(x); Yt <- log(y)
-  lin <- linearised_stats(Xt, Yt, n)
-  a <- exp(lin$A)
-  b <- lin$B
-  fitted <- a * x^b
-  sse <- sse_fit(y, fitted, n); mse <- mse_fit(y, fitted, n)
-  if (plot) {
-    g <- seq(min(x), max(x), length.out = 300)
-    plot_curve_fit(x, y, n, g, a * g^b, "power", "y = ")
-  }
-  structure(list(
-    a = a, b = b, A = lin$A, B = lin$B, r = lin$r, r_squared_linear = lin$r2,
-    mse_linear = lin$mse, sse = sse, mse = mse, rmse = sqrt(mse),
-    r_squared = r_squared_fit(y, fitted, n), lin = lin,
-    equation = paste0("y = ", full_digits(a), " * x^", full_digits(b)),
-    description = "Power fit y = a * x^b",
-    labels = c("a", "b"),
-    report = function() report_linearised(lin, "ln(y) = A + B * ln(x)      with  A = ln(a)  and  B = b", "A = ln(a)  (intercept of the straight line)", "B = b  (slope of the straight line)",
-                                          list(list(label = "a", value = a), list(label = "b", value = b)),
-                                          "y", sse, mse, r_squared_fit(y, fitted, n))
-  ), class = "stat_fit")
-}
-
-# -----------------------------------------------------------------------------
-# predict_power(a, b, x_new)
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : Predicts y values from a fitted power-law model y = a * x^b.
-# PARAMETERS   :
-#   a, b  : the parameters returned by fit_power().
-#   x_new : the X value(s) to predict at (should be positive).
-# RETURNS      : The predicted y value(s).
-# EXAMPLE      :
-#   predict_power(0.5, 2, x_new = 6)
-# -----------------------------------------------------------------------------
-predict_power <- function(a, b, x_new) {
-  a * x_new^b
-}
-
-
-# =============================================================================
-# 6. MULTIPLE LINEAR REGRESSION (one response, several predictors)
-# =============================================================================
-
-# -----------------------------------------------------------------------------
-# multiple_regression(predictors, response)
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : Fits the best (least-squares) linear model that predicts a
-#                response variable from SEVERAL predictor variables at once:
-#                response = a0 + a1*predictor_1 + a2*predictor_2 + ...
-#                This is the generalisation of regression_y_on_x() to more
-#                than one predictor (it includes simple regression and
-#                polynomial regression as special cases — see
-#                polynomial_regression()).
-# FORMULA (for reference — matches the slides' notation):
-#   Design matrix M = [1, predictor columns].
-#   Coefficients A = (M' M)^(-1) M' response
-# PARAMETERS   :
-#   predictors : a matrix or data.frame with one COLUMN per predictor
-#                variable (do not include a column of 1s; it is added
-#                automatically). One row per observation.
-#   response   : vector with the value of the variable to predict, one per
-#                observation (same number of rows as `predictors`).
-# RETURNS      : A list with:
-#                  $coefficients — named vector: intercept, then one slope
-#                                  per predictor column, in order.
-#                  $fitted       — the model's predicted value for every
-#                                  observation used to fit it.
-#                  $residuals    — response - fitted, for every observation.
-# EXAMPLE      :  (fitting a plane z = a + b*x + c*y)
-#   x <- c(0,1,0,-1,0,1,1,2); y <- c(0,1,1,1,3,2,2,0); z <- c(2,3,4,5,7,4,5,0)
-#   model <- multiple_regression(cbind(x, y), z)
-#   model$coefficients          # intercept, x, y
-#   sse_fit(z, model$fitted)    # 0.6477
-#   r_squared_fit(z, model$fitted)   # 0.9794
-# -----------------------------------------------------------------------------
-multiple_regression <- function(predictors, response) {
-  X <- as.matrix(predictors)
-  M <- cbind(Intercept = 1, X)
-  A <- solve(t(M) %*% M) %*% t(M) %*% response
-  coefs <- as.vector(A)
-  names(coefs) <- colnames(M)
-  fitted_values <- as.vector(M %*% A)
-  list(coefficients = coefs,
-       fitted    = fitted_values,
-       residuals = response - fitted_values)
-}
-
-# -----------------------------------------------------------------------------
-# predict_multiple(coefficients, new_predictors)
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : Predicts the response for new observations from a model
-#                fitted with multiple_regression().
-# PARAMETERS   :
-#   coefficients   : the $coefficients returned by multiple_regression()
-#                    (intercept first, then one slope per predictor, in the
-#                    same order the predictors were given).
-#   new_predictors : a matrix or data.frame with the SAME predictor columns,
-#                    in the same order, for the new observations to predict.
-# RETURNS      : Vector with the predicted response, one per new observation.
-# EXAMPLE      :
-#   model <- multiple_regression(cbind(x, y), z)
-#   predict_multiple(model$coefficients, cbind(x = 1, y = 1))
-# -----------------------------------------------------------------------------
-predict_multiple <- function(coefficients, new_predictors) {
-  Xnew <- cbind(Intercept = 1, as.matrix(new_predictors))
-  as.vector(Xnew %*% coefficients)
-}
-
-# -----------------------------------------------------------------------------
-# polynomial_regression(x, y, degree)
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : Fits a polynomial curve (e.g. a parabola for degree = 2:
-#                y = a + b*x + c*x^2) to your data, using the least-squares
-#                method. This is just multiple_regression() with the
-#                predictors being the powers of x (x, x^2, x^3, ...), so it
-#                reuses that function internally.
-# PARAMETERS   :
-#   x      : vector of X values.
-#   y      : vector of Y values.
-#   degree : the highest power of x to include (2 for a parabola, 3 for a
-#            cubic curve, and so on).
-# RETURNS      : Same as multiple_regression(): a list with $coefficients
-#                (intercept, then the coefficient of x, x^2, ..., x^degree),
-#                $fitted and $residuals.
-# EXAMPLE      :
-#   x <- c(1,2,3,4,5); y <- c(2,3,7,14,23)
-#   model <- polynomial_regression(x, y, degree = 2)
-#   model$coefficients        # intercept, x, x^2
-#   r_squared_fit(y, model$fitted)
-# -----------------------------------------------------------------------------
-polynomial_regression <- function(x, y, degree) {
-  preds <- sapply(1:degree, function(k) x^k)
-  colnames(preds) <- paste0("x^", 1:degree)
-  multiple_regression(preds, y)
-}
-
-# -----------------------------------------------------------------------------
-# join_signed_terms(values, labels, sep)        [you never call this yourself]
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : Small helper used when printing a fit_model() result: it writes
-#                "3.6591 a + 0.5309 b" with the right + and - signs.
-# -----------------------------------------------------------------------------
-join_signed_terms <- function(values, labels, sep = " ") {
-  out <- ""
-  for (i in seq_along(values)) {
-    magnitude <- full_digits(abs(values[i]))
-    term <- if (labels[i] == "") magnitude else paste0(magnitude, sep, labels[i])
-    if (i == 1) {
-      out <- paste0(if (values[i] < 0) "-" else "", term)
-    } else {
-      out <- paste0(out, if (values[i] < 0) " - " else " + ", term)
-    }
-  }
-  out
-}
-
-# -----------------------------------------------------------------------------
-# fit_model(model, data = NULL, n = NULL, plot = TRUE, method = "auto", start = NULL)
-#                                                  <- THE SIMPLEST ONE TO USE
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : Fits ANY model that is linear in its unknown coefficients,
-#                and you write the model AS TEXT, exactly as the exam gives
-#                it. It does the whole exercise: builds and shows the normal
-#                equations, solves them, and gives the coefficients, the
-#                fitted values, the errors, SSE, MSE and R^2. The model is
-#                written the way you read it in the statement, with your own
-#                letters.
-# HOW TO WRITE THE MODEL : put the model between quotes, with ONE "=" and an
-#                explicit * between a coefficient and what it multiplies:
-#     "y = a*x + b"                  straight line
-#     "z = a + b*x + c*y"            plane (multiple regression)
-#     "y = a*x^2 + b*x + c"          parabola
-#     "y = a*sin(x) + b*cos(x)"      no constant term: just don't write one
-#     "y = a + b*log(x)"             any function of x: sin, cos, log, exp...
-#   * The unknown COEFFICIENTS are every letter in the model that is NOT one
-#     of your data variables (a, b, c, ... normally). The DATA variables are
-#     the ones you already created with the same length as the response
-#     (x, y, z, ...). They are told apart automatically.
-#   * Exponential, hyperbolic and power models with ONE variable are
-#     recognised and fitted automatically by linearisation (same method as
-#     fit_exponential(), fit_hyperbolic(), fit_power()): "y = a*exp(b*x)",
-#     "y = a*b^x", "y = 1/(a + b*x)", "y = a*x^b". Any other model that is not
-#     linear in its coefficients is refused with an explanation.
-#   * The letter e means Euler's number: "y = a*e^(b*x)" works like
-#     "y = a*exp(b*x)" (unless you have a data variable called e).
-#   * ANY OTHER formula works too, even if it is not linear in the coefficients
-#     (e.g. "y = a/(b + x)", "y = a*x^2 + b^x", "y = a + b*x^c"): the coefficients
-#     are then found by minimising SSE numerically. method = "numeric" forces
-#     this direct minimisation also for the linear / exponential / hyperbolic /
-#     power forms; start = c(a = 1, b = 2) gives the starting values.
-#   * The plot (data + fitted curve, or observed vs fitted if there are
-#     several variables) is drawn automatically; plot = FALSE skips it.
-# FORMULA (for reference — the normal equations, as in the slides):
-#   M = one column per coefficient (what multiplies it, evaluated at the data)
-#   (M' M) * coefficients = M' y       (with frequencies n: (M' W M) ... M' W y)
-# PARAMETERS   :
-#   model : the model as text, e.g. "y = a*x^2 + b*x + c" (see above). The
-#           variable BEFORE the "=" is the one being predicted.
-#   data  : optional data.frame or list with the variables (e.g. `pares`).
-#           Leave it out to use the variables you already created.
-#   plot  : FALSE to skip the plot.
-#   method: "auto" (default: the course method) or "numeric" (direct minimisation of SSE).
-#   start : optional starting values for the numeric method.
-#   n     : optional vector with how many times each observation repeats
-#           (its absolute frequency), exactly as in the rest of this file.
-# RETURNS      : An object that prints the normal equations (with YOUR letters
-#                a, b, c...), the solution, the fitted equation with the
-#                numbers filled in, and SSE / MSE / R^2. You can also use:
-#                  $coefficients — named vector (a, b, c, ... in the order
-#                                  they appear in the model).
-#                  $fitted, $residuals, $sse, $mse, $r_squared (the slides'
-#                  definition: 1 - MSE / variance of the response),
-#                  $normal_lhs, $normal_rhs — the two sides of the normal
-#                  equations.
-# EXAMPLE      :
-#   x <- c(0,1,0,-1,0,1,1,2); y <- c(0,1,1,1,3,2,2,0); z <- c(2,3,4,5,7,4,5,0)
-#   fit_model("y = a*sin(x) + b*cos(x)")   # a = 0.6900588..., b = 1.5838855...
-#   fit_model("y = a*x^2 + b*x + c")       # a = -0.5, b = 0.3333..., c = 1.5833...
-#   fit_model("z = a + b*x + c*y")         # a = 2.2045..., b = -1.0568..., c = 1.6591...
-# -----------------------------------------------------------------------------
-fit_model <- function(model, data = NULL, n = NULL, plot = TRUE,
-                      method = "auto", start = NULL) {
-  caller <- parent.frame()
-  env <- if (is.null(data)) caller else list2env(as.list(data), parent = caller)
-  sides <- strsplit(model, "=", fixed = TRUE)[[1]]
-  if (length(sides) != 2) {
-    stop('Write the model as text with exactly one "=", e.g. "y = a*x + b".')
-  }
-  response_name <- trimws(sides[1])
-  rhs <- parse(text = sides[2])[[1]]
-  if (is.null(get0("e", envir = env, mode = "numeric")))     # e = Euler's number
-    rhs <- do.call(substitute, list(rhs, list(e = exp(1))))
-  response <- get0(response_name, envir = env, mode = "numeric")
-  if (is.null(response)) {
-    stop("I can't find the variable `", response_name,
-         "` (the one before the \"=\") in your workspace or in `data`.")
-  }
-  N <- length(response)
-  
-  # data variables = symbols that exist as numeric vectors of the same length
-  # as the response; every other symbol is an unknown coefficient
-  symbols <- setdiff(all.vars(rhs), "pi")
-  is_data <- vapply(symbols, function(s) {
-    v <- get0(s, envir = env, mode = "numeric")
-    !is.null(v) && length(v) == N
-  }, logical(1))
-  params    <- symbols[!is_data]
-  data_vars <- symbols[is_data]
-  if (length(params) == 0) {
-    stop("No unknown coefficients found. Use letters that are not data ",
-         "variables for them, e.g. a, b, c.")
-  }
-  np <- length(params)
-  # typing mistake check: "bx" is ONE name in R, the product is b*x
-  glued <- params[nchar(params) > 1 & grepl("^[A-Za-z]+$", params)]
-  glue_hint <- if (length(glued) > 0)
-    paste0("\nCareful: R reads `", paste(glued, collapse = "`, `"), "` as ONE name. ",
-           "Write the product with * (for example b*x) and put parentheses where needed ",
-           "(1/(a + b*x) is NOT 1/a + b*x).") else ""
-  
-  # value of the right-hand side for given coefficient values
-  value_of <- function(values) {
-    e <- new.env(parent = env)
-    for (j in 1:np) assign(params[j], values[j], envir = e)
-    rep_len(as.numeric(eval(rhs, e)), N)
-  }
-  # exponential / hyperbolic / power models: recognised and fitted by
-  # linearisation (like fit_exponential(), fit_hyperbolic(), fit_power())
-  if (method == "numeric") {
-    fit <- fit_numeric_nonlinear(model, response_name, rhs, params, data_vars, env,
-                                 response, n, value_of, start)
-    if (plot) plot_model_fit(fit)
-    return(fit)
-  }
-  if (np == 2 && length(data_vars) == 1) {
-    xv <- get(data_vars, envir = env)
-    form <- recognize_nonlinear_form(value_of, xv)
-    if (!is.null(form)) {
-      fit <- fit_linearised_form(form, model, response_name, rhs, params,
-                                 data_vars, env, xv, response, n)
-      if (plot) plot_model_fit(fit)
-      return(fit)
-    }
-  }
-  offset <- value_of(rep(0, np))                # part with no coefficient
-  M <- matrix(0, N, np)                         # one column per coefficient
-  for (j in 1:np) {
-    unit <- rep(0, np); unit[j] <- 1
-    M[, j] <- value_of(unit) - offset
-  }
-  linear <- !(any(!is.finite(M)) || any(!is.finite(offset)))
-  if (linear) {
-    test <- 1.3 * (-1)^(1:np) * (1 + (1:np) / 7)  # is it really linear?
-    linear <- isTRUE(all.equal(value_of(test), as.vector(offset + M %*% test),
-                               tolerance = 1e-8))
-  }
-  if (!linear) {                                 # any other model: numerical least squares
-    if (nzchar(glue_hint)) stop("The model could not be evaluated.", glue_hint)
-    fit <- fit_numeric_nonlinear(model, response_name, rhs, params, data_vars, env,
-                                 response, n, value_of, start)
-    if (plot) plot_model_fit(fit)
-    return(fit)
-  }
-  
-  w <- if (is.null(n)) rep(1, N) else n
-  normal_lhs <- t(M) %*% (w * M)
-  normal_rhs <- as.vector(t(M) %*% (w * (response - offset)))
-  dimnames(normal_lhs) <- list(params, params)
-  solution <- tryCatch(solve(normal_lhs, normal_rhs), error = function(e) {
-    stop("The normal equations have no single solution: two of your terms ",
-         "are repeated or proportional (for example a*x + b*x).")
-  })
-  coefs <- setNames(as.vector(solution), params)
-  fitted_values <- as.vector(offset + M %*% coefs)
-  fit <- structure(list(
-    model         = model,
-    response_name = response_name,
-    response      = response,
-    weights       = n,
-    note          = NULL,
-    rhs           = rhs,
-    params        = params,
-    data_vars     = data_vars,
-    env           = env,
-    normal_lhs    = normal_lhs,
-    normal_rhs    = normal_rhs,
-    coefficients  = coefs,
-    fitted        = fitted_values,
-    residuals     = response - fitted_values,
-    sse           = sse_fit(response, fitted_values, n),
-    mse           = mse_fit(response, fitted_values, n),
-    rmse          = sqrt(mse_fit(response, fitted_values, n)),
-    r_squared     = r_squared_fit(response, fitted_values, n)
-  ), class = "model_fit")
-  if (plot) plot_model_fit(fit)
-  fit
-}
-
-# -----------------------------------------------------------------------------
-# predict_model(fit, new_data)
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : Predicts the response for NEW values, using a model fitted
-#                with fit_model().
-# PARAMETERS   :
-#   fit      : the result of fit_model().
-#   new_data : a data.frame (or list) with the data variables of the model,
-#              e.g. data.frame(x = c(3, 4)).
-# RETURNS      : Vector with the predicted response, one per new value.
-# EXAMPLE      :
-#   x <- c(0,1,0,-1,0,1,1,2); y <- c(0,1,1,1,3,2,2,0)
-#   model <- fit_model("y = a*x^2 + b*x + c")
-#   predict_model(model, data.frame(x = c(3, 4)))
-# -----------------------------------------------------------------------------
-predict_model <- function(fit, new_data) {
-  missing_vars <- setdiff(fit$data_vars, names(new_data))
-  if (length(missing_vars) > 0) {
-    stop("`new_data` needs the variable(s): ", paste(missing_vars, collapse = ", "))
-  }
-  e <- list2env(as.list(new_data), parent = fit$env)
-  for (j in seq_along(fit$params)) assign(fit$params[j], fit$coefficients[[j]], envir = e)
-  as.numeric(eval(fit$rhs, e))
-}
-
-# -----------------------------------------------------------------------------
-# print.model_fit(x, ...)                  [you never call this yourself]
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : Teaches R how to display the result of fit_model(): the
-#                normal equations (with your own letters), their solution,
-#                the fitted equation with the numbers filled in, and the
-#                goodness of fit. It runs AUTOMATICALLY when you print a fit.
-# -----------------------------------------------------------------------------
-print.model_fit <- function(x, ...) {
-  report_title(paste0("LEAST-SQUARES FIT:  ", x$model))
-  if (!is.null(x$note)) cat("  ", x$note, "\n", sep = "")
-  if (!is.null(x$normal_lhs)) {
-    report_section("Normal equations (they give the coefficients)")
-    for (i in seq_along(x$params)) {
-      cat("  ", full_digits(x$normal_rhs[i]), " = ",
-          join_signed_terms(x$normal_lhs[i, ], x$params), "\n", sep = "")
-    }
-  }
-  report_section("Coefficients")
-  for (i in seq_along(x$params)) {
-    cat(sprintf("  %-4s= %s\n", x$params[i], full_digits(x$coefficients[i])))
-  }
-  filled <- do.call(substitute, list(x$rhs, as.list(x$coefficients)))
-  filled <- paste(deparse(filled, width.cutoff = 500), collapse = "")
-  filled <- gsub("+ -", "- ", filled, fixed = TRUE)
-  report_section("Fitted model")
-  cat("  ", x$response_name, " = ", filled, "\n", sep = "")
-  if (!is.null(x$lin)) {
-    t <- x$lin_texts
-    A_lab <- switch(t$form, hyperbolic = paste0("A = ", t$P1), paste0("A = ln(", t$P1, ")"))
-    B_lab <- switch(t$form, exponential_base = paste0("B = ln(", t$P2, ")"), paste0("B = ", t$P2))
-    line_txt <- switch(t$form,
-                       exponential      = paste0("ln(", t$resp, ") = A + B * ", t$xname),
-                       exponential_base = paste0("ln(", t$resp, ") = A + B * ", t$xname),
-                       hyperbolic       = paste0("1/", t$resp, " = A + B * ", t$xname),
-                       power            = paste0("ln(", t$resp, ") = A + B * ln(", t$xname, ")"))
-    report_section("Straight line after the change of variable")
-    cat("  ", line_txt, "\n", sep = "")
-    report_line(paste0(A_lab, "  (intercept of the straight line)"), x$lin$A)
-    report_line(paste0(B_lab, "  (slope of the straight line)"), x$lin$B)
-    for (k in seq_along(x$params)) report_line(x$params[k], x$coefficients[k])
-    report_line("r (correlation coefficient of the transformed data)", x$lin$r)
-    report_line("MSE of the straight line (in transformed units)", x$lin$mse)
-  }
-  report_section(if (!is.null(x$lin)) paste0("Goodness of the curve on the ORIGINAL ", x$response_name, " values") else "Goodness of fit")
-  report_line("SSE (sum of squared errors)", x$sse)
-  report_line("MSE (mean squared error = SSE / N)", x$mse)
-  report_line("RMSE (typical error, in the units of the response)", x$rmse)
-  if (!is.null(x$lin)) report_line(paste0("Variance of ", x$response_name, " (Vy, divides by N)"), variance(x$response, x$weights))
-  report_line(paste0(if (!is.null(x$lin)) "R^2 OF THE COURSE = " else "R^2 = ", "1 - MSE / variance of ", x$response_name), x$r_squared)
-  cat("  (R^2 close to 1 = the model explains almost all the variation)\n")
-  final_box(paste0("FINAL RESULTS:  ", x$model), c(
-    paste0(x$response_name, " = ", filled),
-    vapply(seq_along(x$params), function(i) box_line(x$params[i], x$coefficients[i]), character(1)),
-    box_line("SSE", x$sse),
-    box_line("MSE", x$mse),
-    box_line("R^2", x$r_squared)))
-  invisible(x)
-}
-
-# -----------------------------------------------------------------------------
-# INTERNAL: fit_numeric_nonlinear      (called by fit_model(); not called by you)
-#   For models that are NOT linear in their coefficients and are not one of the
-#   four forms of the slides (exponential, hyperbolic, power): it looks for the
-#   coefficients that minimise SSE = sum n_i (y_i - model_i)^2 directly,
-#   trying many starting points. There are no normal equations to show.
-# -----------------------------------------------------------------------------
-fit_numeric_nonlinear <- function(model, response_name, rhs, params, data_vars, env,
-                                  response, n, value_of, start = NULL) {
-  np <- length(params); N <- length(response)
-  w <- if (is.null(n)) rep(1, N) else n
-  sse_of <- function(p) {
-    v <- suppressWarnings(tryCatch(value_of(p), error = function(e) rep(NA_real_, N)))
-    if (any(!is.finite(v))) return(1e300)
-    sum(w * (response - v)^2)
-  }
-  old_seed <- if (exists(".Random.seed", envir = globalenv())) get(".Random.seed", envir = globalenv()) else NULL
-  set.seed(12345)
-  on.exit(if (!is.null(old_seed)) assign(".Random.seed", old_seed, envir = globalenv()), add = TRUE)
-  if (!is.null(start)) {
-    st <- if (!is.null(names(start))) start[params] else start
-    if (length(st) != np || anyNA(st)) stop("`start` needs one starting value per coefficient: ", paste(params, collapse = ", "), ".")
-    starts <- list(as.numeric(st))
-  } else {
-    starts <- c(list(rep(1, np), rep(0.5, np), rep(2, np), rep(0.1, np)),
-                lapply(1:40, function(i) runif(np, -3, 3)))
-  }
-  runs <- lapply(starts, function(p0) {
-    r <- tryCatch(optim(p0, sse_of, method = "Nelder-Mead",
-                        control = list(maxit = 20000, reltol = 1e-15)), error = function(e) NULL)
-    if (is.null(r)) return(NULL)
-    r2 <- tryCatch(optim(r$par, sse_of, method = "BFGS",
-                         control = list(maxit = 2000, reltol = 1e-15)), error = function(e) NULL)
-    if (!is.null(r2) && r2$value <= r$value) r2 else r
-  })
-  runs <- Filter(Negate(is.null), runs)
-  vals <- vapply(runs, function(r) r$value, numeric(1))
-  if (length(vals) == 0 || min(vals) >= 1e299)
-    stop("I could not find coefficients for this model. Check the formula, or give starting values with start = c(a = 1, b = 1).")
-  best <- runs[[which.min(vals)]]
-  agree <- sum(abs(vals - min(vals)) <= 1e-8 * max(1, min(vals)))
-  coefs <- setNames(best$par, params)
-  fitted_values <- value_of(best$par)
-  structure(list(
-    model = model, response_name = response_name, response = response, weights = n,
-    note = paste0("The model is NOT linear in its coefficients and it is not one of the forms of the slides,\n",
-                  "  so the coefficients were found by minimising SSE numerically (no normal equations).\n",
-                  "  ", agree, " of ", length(vals), " starting points reached this same minimum.",
-                  if (agree < 2 && is.null(start)) " If you are not sure, try other values with start = c(a = 1, b = 1)." else ""),
-    rhs = rhs, params = params, data_vars = data_vars, env = env,
-    normal_lhs = NULL, normal_rhs = NULL, coefficients = coefs,
-    fitted = fitted_values, residuals = response - fitted_values,
-    sse = sse_fit(response, fitted_values, n), mse = mse_fit(response, fitted_values, n),
-    rmse = sqrt(mse_fit(response, fitted_values, n)),
-    r_squared = r_squared_fit(response, fitted_values, n)
-  ), class = "model_fit")
-}
-
-# -----------------------------------------------------------------------------
-# INTERNAL: recognize_nonlinear_form / fit_linearised_form / plot_model_fit
-# (called by fit_model(); you do not call them yourself)
-#   recognize_nonlinear_form : checks numerically whether the typed model is
-#       a*exp(b*x), a*b^x, 1/(a + b*x) or a*x^b (with any letters).
-#   fit_linearised_form      : fits it as a straight line after transforming
-#       (ln y, 1/y, ln x), with the SAME formulas as fit_exponential(), etc.,
-#       but taking frequencies into account. SSE/MSE/R^2 are computed on the
-#       ORIGINAL y scale.
-#   plot_model_fit           : draws data + fitted curve (one variable) or
-#       observed vs fitted values (several variables).
-# -----------------------------------------------------------------------------
-recognize_nonlinear_form <- function(value_of, xv) {
-  forms <- list(
-    exponential      = function(p, x) p[1] * exp(p[2] * x),
-    exponential_base = function(p, x) p[1] * p[2]^x,
-    hyperbolic       = function(p, x) 1 / (p[1] + p[2] * x),
-    power            = function(p, x) p[1] * x^p[2])
-  tests <- list(c(1.3, 0.7), c(0.6, 1.1), c(2.1, 0.4))
-  for (nm in names(forms)) for (swap in c(FALSE, TRUE)) {
-    ok <- all(vapply(tests, function(p) {
-      got  <- suppressWarnings(tryCatch(value_of(p), error = function(e) NA_real_))
-      want <- suppressWarnings(forms[[nm]](if (swap) rev(p) else p, xv))
-      all(is.finite(got)) && all(is.finite(want)) &&
-        isTRUE(all.equal(as.numeric(got), as.numeric(want), tolerance = 1e-9))
-    }, logical(1)))
-    if (ok) return(list(form = nm, swap = swap))
-  }
-  NULL
-}
-
-fit_linearised_form <- function(form, model, response_name, rhs, params,
-                                data_vars, env, xv, response, n) {
-  f <- form$form
-  if (f != "hyperbolic" && any(response <= 0))
-    stop("This model needs every `", response_name, "` value to be positive (it uses a logarithm).")
-  if (f == "hyperbolic" && any(response == 0))
-    stop("This model uses 1/", response_name, ", so no `", response_name, "` value can be 0.")
-  if (f == "power" && any(xv <= 0))
-    stop("This model needs every `", data_vars, "` value to be positive (it uses a logarithm).")
-  idx <- if (form$swap) c(2, 1) else c(1, 2)       # which coefficient is the form's 1st / 2nd
-  P1 <- params[idx[1]]; P2 <- params[idx[2]]
-  Xt <- if (f == "power") log(xv) else xv
-  Yt <- if (f == "hyperbolic") 1 / response else log(response)
-  lin <- linearised_stats(Xt, Yt, n)
-  A <- lin$A; B <- lin$B
-  p <- switch(f, exponential = c(exp(A), B), exponential_base = c(exp(A), exp(B)),
-              hyperbolic = c(A, B), power = c(exp(A), B))
-  note <- switch(f,
-                 exponential      = paste0("Fitted as a straight line:  ln(", response_name, ") = ln(", P1, ") + ", P2, "*", data_vars),
-                 exponential_base = paste0("Fitted as a straight line:  ln(", response_name, ") = ln(", P1, ") + ln(", P2, ")*", data_vars),
-                 hyperbolic       = paste0("Fitted as a straight line:  1/", response_name, " = ", P1, " + ", P2, "*", data_vars),
-                 power            = paste0("Fitted as a straight line:  ln(", response_name, ") = ln(", P1, ") + ", P2, "*ln(", data_vars, ")"))
-  coefs <- numeric(2); coefs[idx] <- p; names(coefs) <- params
-  e <- list2env(as.list(setNames(list(xv), data_vars)), parent = env)
-  for (j in 1:2) assign(params[j], coefs[[j]], envir = e)
-  fitted_values <- as.numeric(eval(rhs, e))
-  structure(list(
-    model = model, response_name = response_name, response = response, weights = n,
-    note = paste0(note, "\n  (SSE, MSE and R^2 below are measured on the ORIGINAL ",
-                  response_name, " values, not on the transformed ones)"),
-    rhs = rhs, params = params, data_vars = data_vars, env = env,
-    normal_lhs = NULL, normal_rhs = NULL, coefficients = coefs,
-    fitted = fitted_values, residuals = response - fitted_values,
-    sse = sse_fit(response, fitted_values, n), mse = mse_fit(response, fitted_values, n),
-    rmse = sqrt(mse_fit(response, fitted_values, n)),
-    r_squared = r_squared_fit(response, fitted_values, n),
-    lin = lin, lin_texts = list(P1 = P1, P2 = P2, form = f, resp = response_name, xname = data_vars)
-  ), class = "model_fit")
-}
-
-plot_model_fit <- function(fit) {
-  size <- if (is.null(fit$weights)) rep(1, length(fit$response)) else fit$weights
-  if (length(fit$data_vars) == 1) {
-    v <- fit$data_vars
-    xv <- get(v, envir = fit$env)
-    grid <- seq(min(xv), max(xv), length.out = 300)
-    curve_y <- predict_model(fit, setNames(list(grid), v))
-    plot(xv, fit$response, pch = 19, col = "steelblue", cex = sqrt(size),
-         xlab = v, ylab = fit$response_name,
-         main = paste0("Fit: ", fit$model),
-         ylim = range(c(fit$response, curve_y), finite = TRUE))
-    lines(grid, curve_y, col = "firebrick", lwd = 2)
-    legend("topleft", legend = c("data (size = frequency)", "fitted model"),
-           col = c("steelblue", "firebrick"), pch = c(19, NA), lty = c(NA, 1), bty = "n")
-  } else if (length(fit$data_vars) > 1) {
-    plot(fit$fitted, fit$response, pch = 19, col = "steelblue", cex = sqrt(size),
-         xlab = paste0("fitted ", fit$response_name),
-         ylab = paste0("observed ", fit$response_name),
-         main = paste0("Observed vs fitted: ", fit$model))
-    abline(0, 1, col = "firebrick", lwd = 2)
-  }
-  invisible(NULL)
-}
-
-
-# =============================================================================
-# 7. GRAPHS
-# =============================================================================
-
-# -----------------------------------------------------------------------------
-# plot_regression_lines(x, y, n = NULL, show_both = TRUE, main = ..., x_name = "X", y_name = "Y")
-# -----------------------------------------------------------------------------
-# WHAT IT DOES : Draws the scatter plot of the data (one point per pair, its
-#                size proportional to how often that pair repeats) together
-#                with the regression line(s): R_Y/X (predicts Y from X, in
-#                red) and, if `show_both = TRUE`, also R_X/Y (predicts X
-#                from Y, drawn as it appears in the X-Y plane, in green
-#                dashed). Both lines always cross at the centre of gravity
-#                (mean of X, mean of Y), which the plot also marks.
-# PARAMETERS   :
-#   x         : the X value of each pair.
-#   y         : the Y value of each pair.
-#   n         : (optional) how many times each pair appears (its
-#               frequency). Leave empty for raw, one-row-per-observation
-#               data.
-#   show_both : TRUE (default) draws both regression lines (R_Y/X and
-#               R_X/Y). FALSE draws only R_Y/X.
-#   main      : title of the plot.
-#   x_name, y_name : names shown on the axes and in the legend.
-# RETURNS      : Invisibly, a list with $R_Y_X and $R_X_Y — the two fitted
-#                models (each with $a and $b), in case you want to inspect
-#                or reuse them. Mainly used for the plot it draws.
-# EXAMPLE      :  (height/weight table from the slides)
-#   pares <- table_to_pairs(tab, x_marks, y_marks)
-#   plot_regression_lines(pares$x, pares$y, pares$n,
-#                          main = "Height vs Weight")
-# -----------------------------------------------------------------------------
-plot_regression_lines <- function(x, y, n = NULL, show_both = TRUE,
-                                  main = "Scatter plot and regression line(s)",
-                                  x_name = "X", y_name = "Y") {
-  n_size <- if (is.null(n)) rep(1, length(x)) else n
-  model_yx <- regression_y_on_x(x, y, n)
-  
-  plot(x, y, cex = sqrt(n_size), pch = 19, col = "steelblue",
-       xlab = x_name, ylab = y_name, main = main)
-  abline(a = model_yx$a, b = model_yx$b, col = "firebrick", lwd = 2)
-  
-  legend_labels <- c("data (size = frequency)", paste0(y_name, " on ", x_name))
-  legend_colors <- c("steelblue", "firebrick")
-  legend_pch    <- c(19, NA)
-  legend_lty    <- c(NA, 1)
-  
-  model_xy <- NULL
-  if (show_both) {
-    model_xy <- regression_x_on_y(x, y, n)
-    # R_X/Y is x = a' + b'*y; rewritten as y = (x - a')/b' to draw it in the X-Y plane
-    if (abs(model_xy$b) < 1e-12) {
-      # slope 0 (r = 0): the line x = a' is a VERTICAL line
-      abline(v = model_xy$a, col = "darkgreen", lwd = 2, lty = 2)
-    } else {
-      abline(a = -model_xy$a / model_xy$b, b = 1 / model_xy$b,
-             col = "darkgreen", lwd = 2, lty = 2)
-    }
-    legend_labels <- c(legend_labels, paste0(x_name, " on ", y_name))
-    legend_colors <- c(legend_colors, "darkgreen")
-    legend_pch    <- c(legend_pch, NA)
-    legend_lty    <- c(legend_lty, 2)
-  }
-  
-  center <- bivariate_mean(x, y, n)
-  points(center["mean_x"], center["mean_y"], pch = 4, cex = 1.5, lwd = 2, col = "black")
-  
-  legend("topleft", legend = legend_labels, col = legend_colors,
-         pch = legend_pch, lty = legend_lty, bty = "n")
-  
-  invisible(list(R_Y_X = model_yx, R_X_Y = model_xy))
-}
 
 
 # =============================================================================
 # 0. MAIN FUNCTIONS (ONE CALL = FULL ANSWER)
 # =============================================================================
-# These are the functions to use in the exam. Each one prints a complete
-# report in plain English, uses the real names of your variables, shows every
-# decimal and draws the plot.
-#
-#   Two lists of numbers x, y (raw or with frequencies) -> linear_regression()
-#   A two-way table (X by Y), values or intervals       -> analyze_table()
-#   Two regression lines given as equations            -> analyze_regression_lines()
-#   Any formula written as text, e.g. "y = a*x^2+b*x+c" -> fit_model()
-# =============================================================================
-
-# INTERNAL: plain-English reading of a correlation coefficient
-describe_correlation <- function(r) {
-  a <- abs(r)
-  strength <- if (a >= 1 - 1e-12) "perfect" else if (a >= 0.9) "very strong"
-  else if (a >= 0.7) "strong" else if (a >= 0.4) "moderate"
-  else if (a >= 0.2) "weak" else "very weak or none"
-  direction <- if (a < 1e-12) "" else if (r > 0) "positive (when one grows, the other tends to grow)"
-  else "negative (when one grows, the other tends to decrease)"
-  paste0(strength, if (nzchar(direction)) paste0(", ", direction) else " (no linear relationship)")
-}
-
-# INTERNAL: one aligned line "name = value   -> meaning"
-kv_line <- function(name, value, note = "") {
-  cat(sprintf("  %-14s = %-22s %s\n", name, paste(full_digits(value), collapse = ", "),
-              if (nzchar(note)) paste0("<- ", note) else ""))
-}
-
-# INTERNAL: prints ONE regression line with everything related to it
-report_regression_line <- function(title, resp, pred, a, b, actual, fitted, n,
-                                   course_name, cv, var_pred, var_resp, mean_resp,
-                                   mean_pred, r2, prime = "") {
-  bar <- strrep("=", 72)
-  cat("\n", bar, "\n ", title, "\n", bar, "\n", sep = "")
-  cat("  COURSE NAME    : ", course_name, "\n", sep = "")
-  cat("  WHEN TO USE IT : you KNOW ", pred, " and want to ESTIMATE ", resp, "\n", sep = "")
-  cat("  GENERAL FORM   : ", resp, " = a + b * ", pred, "\n", sep = "")
-  cat("  WITH YOUR DATA : ", resp, " = ", full_digits(a), signed_full(b), " * ", pred, "\n", sep = "")
-  
-  cat("\n  Slope b", prime, "  (how much ", resp, " changes for each +1 in ", pred, ")\n", sep = "")
-  cat("     formula : b", prime, " = Cov(X,Y) / Var(", pred, ")\n", sep = "")
-  cat("     numbers : b", prime, " = ", full_digits(cv), " / ", full_digits(var_pred), " = ", full_digits(b), "\n", sep = "")
-  cat("  Intercept a", prime, "  (value of ", resp, " when ", pred, " = 0)\n", sep = "")
-  cat("     formula : a", prime, " = mean ", resp, " - b", prime, " * mean ", pred, "\n", sep = "")
-  cat("     numbers : a", prime, " = ", full_digits(mean_resp), " - (", full_digits(b), ") * ", full_digits(mean_pred),
-      " = ", full_digits(a), "\n", sep = "")
-  
-  sse <- sse_fit(actual, fitted, n); mse <- mse_fit(actual, fitted, n)
-  cat("\n  ERRORS OF THIS LINE  (real ", resp, " minus estimated ", resp, ")\n", sep = "")
-  kv_line("SSE", sse, "sum of squared errors")
-  kv_line("MSE", mse, "SSE / N = mean squared error (this is the variance of the errors)")
-  kv_line("RMSE", sqrt(mse), paste0("sqrt(MSE) = typical error, in units of ", resp))
-  cat("\n  VARIANCE OF ", resp, " SPLIT IN TWO PARTS\n", sep = "")
-  kv_line(paste0("Var(", resp, ")"), var_resp, "total variance of the variable")
-  kv_line("explained", r2 * var_resp, "R^2 * Var = part the line explains")
-  kv_line("MSE", mse, "part the line does NOT explain  (explained + MSE = Var)")
-  kv_line("R^2", r2, "= 1 - MSE / Var = share of the variance explained by the line")
-}
 
 # -----------------------------------------------------------------------------
-# linear_regression(x, y, n = NULL, x_name = NULL, y_name = NULL,
-#                   predict_y_at = NULL, predict_x_at = NULL, plot = TRUE)
+# INTERNAL HELPERS (you do not call these yourself)
+#   series_layout          : turns a vector (+ period, start) or a table
+#                            (rows = years, columns = seasons) into the layout
+#                            that decompose_series() works with.
+#   as_table               : puts a vector in the years x seasons table.
+#   show_table             : prints a table with "-" where there is no value.
 # -----------------------------------------------------------------------------
-# WHAT IT DOES : Everything about the straight-line relationship between two
-#                variables, in ONE call: both regression lines (y on x and
-#                x on y) with their a and b, the covariance, the correlation
-#                coefficient r with a plain-English reading, R^2, the errors
-#                (SSE, MSE, RMSE) of each line, optional predictions, and the
-#                scatter plot with both lines. The names of your variables are
-#                used everywhere (e.g. "weight = a + b * height").
-# PARAMETERS   :
-#   x, y         : the two variables, same length. One value per observation,
-#                  or the different pairs together with their frequencies `n`.
-#   n            : (optional) how many times each pair appears.
-#   x_name,y_name: (optional) names to show; by default the names of the
-#                  objects you passed (for pares$x it shows "x").
-#   predict_y_at : (optional) value(s) of x at which to predict y.
-#   predict_x_at : (optional) value(s) of y at which to predict x.
-#   plot         : FALSE to skip the plot.
-# RETURNS      : Invisibly, a list with y_on_x, x_on_y (each with $a, $b),
-#                covariance, r, r_squared, N.
-# EXAMPLE      :
-#   height <- c(150,160,170,180); weight <- c(50,58,69,80)
-#   linear_regression(height, weight, predict_y_at = 175)
-#   # table data:  p <- table_to_pairs(tab, x_marks, y_marks)
-#   #              linear_regression(p$x, p$y, p$n, x_name="height", y_name="weight")
-# -----------------------------------------------------------------------------
-linear_regression <- function(x, y, n = NULL, x_name = NULL, y_name = NULL,
-                              predict_y_at = NULL, predict_x_at = NULL, plot = TRUE) {
-  xn <- if (is.null(x_name)) variable_label(deparse(substitute(x)), "X") else x_name
-  yn <- if (is.null(y_name)) variable_label(deparse(substitute(y)), "Y") else y_name
-  if (length(x) != length(y)) stop("`x` and `y` must have the same length.")
-  if (!is.null(n) && length(n) != length(x)) stop("`n` must have the same length as `x` and `y`.")
-  w <- freq_or_ones(x, n)
-  N <- sum(w)
-  vx <- variance(x, n); vy <- variance(y, n)
-  if (vx == 0 || vy == 0) stop("One of the variables is constant: there is no regression line.")
-  cv <- covariance(x, y, n)
-  r <- cv / sqrt(vx * vy)
-  yx <- regression_y_on_x(x, y, n); xy <- regression_x_on_y(x, y, n)
-  
-  mx <- arithmetic_mean(x, n); my <- arithmetic_mean(y, n)
-  sx <- sqrt(vx); sy <- sqrt(vy)
-  report_title(paste0("LINEAR REGRESSION:  ", yn, " and ", xn))
-  
-  cat("\n  GENERAL DATA\n")
-  kv_line("N", N, "number of observations")
-  kv_line(paste0("mean ", xn), mx, paste0("average of ", xn))
-  kv_line(paste0("mean ", yn), my, paste0("average of ", yn))
-  kv_line(paste0("Var(", xn, ")"), vx, "variance (divides by N)")
-  kv_line(paste0("Var(", yn, ")"), vy, "variance (divides by N)")
-  kv_line(paste0("sd(", xn, ")"), sx, "standard deviation = sqrt(variance)")
-  kv_line(paste0("sd(", yn, ")"), sy, "standard deviation = sqrt(variance)")
-  kv_line("Cov(X,Y)", cv, "covariance: sign tells the direction of the relationship")
-  kv_line("r", r, "correlation coefficient = Cov / (sd X * sd Y), between -1 and 1")
-  cat("                   Reading: ", describe_correlation(r), "\n", sep = "")
-  kv_line("R^2", r^2, "= r^2, share of the variance explained by a straight line")
-  
-  report_regression_line(paste0("REGRESSION LINE 1:  R_Y/X   (", yn, " on ", xn, ")"),
-                         yn, xn, yx$a, yx$b, y, yx$a + yx$b * x, n,
-                         "R_Y/X  (regression of Y on X)", cv, vx, vy, my, mx, r^2)
-  report_regression_line(paste0("REGRESSION LINE 2:  R_X/Y   (", xn, " on ", yn, ")"),
-                         xn, yn, xy$a, xy$b, x, xy$a + xy$b * y, n,
-                         "R_X/Y  (regression of X on Y)", cv, vy, vx, mx, my, r^2, prime = "'")
-  
-  bar <- strrep("=", 72)
-  cat("\n", bar, "\n ANALYSIS OF THE RESULTS\n", bar, "\n", sep = "")
-  cat("  1. Relationship: r = ", full_digits(r), " -> ", describe_correlation(r), ".\n", sep = "")
-  if (abs(r) < 1e-12) {
-    cat("     Cov = 0, so both slopes are 0: knowing one variable does not improve the\n",
-        "     estimate of the other with a straight line (each line just predicts the mean).\n", sep = "")
-    cat("     IMPORTANT: r = 0 means NO LINEAR relationship; it does NOT mean the variables\n",
-        "     are independent. The relationship could be curved (try a parabola).\n", sep = "")
+default_season_names <- function(period) {
+  if (period == 4)  return(c("Q1", "Q2", "Q3", "Q4"))
+  if (period == 12) return(month.abb)
+  if (period == 7)  return(c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"))
+  paste0("S", seq_len(period))
+}
+
+series_layout <- function(x, period, start, season_names) {
+  if (is.matrix(x) || is.data.frame(x)) {
+    m <- as.matrix(x)
+    period <- ncol(m)
+    values <- as.vector(t(m))
+    rn <- rownames(m)
+    yr <- suppressWarnings(as.numeric(rn))
+    first_year <- if (!is.null(rn) && !anyNA(yr)) yr[1] else 1
+    start_season <- 1
+    if (is.null(season_names)) season_names <- if (!is.null(colnames(m))) colnames(m) else default_season_names(period)
   } else {
-    cat("     The straight line explains ", full_digits(100 * r^2), "% of the variance (R^2 = ",
-        full_digits(r^2), ").\n", sep = "")
-    cat("     Each +1 in ", xn, " changes the estimate of ", yn, " by ", full_digits(yx$b),
-        " (line 1);\n     each +1 in ", yn, " changes the estimate of ", xn, " by ", full_digits(xy$b),
-        " (line 2).\n", sep = "")
-    cat(if (abs(r) >= 0.7) "     The linear model is appropriate for predicting.\n"
-        else "     The linear fit is weak: a non-linear model (parabola, exponential...) may fit better.\n")
+    if (is.null(period)) stop("Give the `period` (4 for quarterly data, 12 for monthly data) or a table with one column per season.")
+    values <- as.numeric(x)
+    first_year <- if (is.null(start)) 1 else start[1]
+    start_season <- if (is.null(start) || length(start) < 2) 1 else start[2]
+    if (is.null(season_names)) season_names <- default_season_names(period)
   }
-  cat("  2. Typical error: line 1 mistakes ", yn, " by about ", full_digits(sqrt(mse_fit(y, yx$a + yx$b * x, n))),
-      " (", yn, " has sd ", full_digits(sy), ");\n     line 2 mistakes ", xn, " by about ",
-      full_digits(sqrt(mse_fit(x, xy$a + xy$b * y, n))), " (", xn, " has sd ", full_digits(sx), ").\n", sep = "")
-  cat("     SSE/MSE/RMSE of the two lines are NOT comparable (different units).\n")
-  cat("  3. The two lines are different: line 1 minimises the errors in ", yn, ", line 2 in ", xn, ".\n",
-      "     Solving line 1 for ", xn, " does NOT give line 2. Both cross at\n",
-      "     (mean ", xn, ", mean ", yn, ") = (", full_digits(mx), ", ", full_digits(my), ").\n", sep = "")
-  cat("  4. Check: b * b' = ", full_digits(yx$b * xy$b), "  must equal  r^2 = ", full_digits(r^2),
-      "  (b * b' = r^2, and r^2 <= 1).\n", sep = "")
-  if (!is.null(predict_y_at)) {
-    report_section(paste0("Predictions of ", yn))
-    for (v in predict_y_at) report_line(paste0("When ", xn, " = ", full_digits(v), ", predicted ", yn),
-                                        yx$a + yx$b * v)
+  if (length(season_names) != period) stop("`season_names` must have ", period, " names.")
+  n <- length(values)
+  idx0 <- (start_season - 1) + (0:(n - 1))
+  list(values = values, n = n, period = period, first_year = first_year,
+       start_season = start_season, season_names = season_names,
+       row = idx0 %/% period + 1, col = idx0 %% period + 1,
+       season = idx0 %% period + 1,
+       year = first_year + idx0 %/% period,
+       n_rows = max(idx0 %/% period) + 1)
+}
+
+as_table <- function(v, L) {
+  m <- matrix(NA_real_, L$n_rows, L$period,
+              dimnames = list(L$first_year + 0:(L$n_rows - 1), L$season_names))
+  for (i in seq_len(L$n)) m[L$row[i], L$col[i]] <- v[i]
+  m
+}
+
+show_table <- function(m) print(m, na.print = "-")
+
+# INTERNAL helpers to build the lines of the final boxes (answer_box / final_box / box_line
+# live in formulas_chapter1.R).
+box_trend <- function(a, b, r2 = NA, nm = "X", var = "t") c(
+  paste0(nm, " = ", full_digits(a), signed_full_t(b), " * ", var),
+  box_line("INTERCEPT a", a),
+  box_line("SLOPE b", b),
+  if (!is.na(r2)) box_line("R^2", r2),
+  paste0("TREND: ", if (abs(b) < 1e-12) "FLAT" else if (b > 0) "GOES UP" else "GOES DOWN"))
+box_seasons <- function(season_names, idx, mult, what = "E'") {
+  unit <- if (mult) 100 else 1
+  vapply(seq_along(idx), function(k) paste0(what, " ", season_names[k], " = ", full_digits(unname(idx[k]) * unit), if (mult) " %" else ""), character(1))
+}
+box_forecast <- function(f) {
+  if (is.null(f)) return(NULL)
+  c("", "PREDICTION:", vapply(seq_len(nrow(f)), function(i)
+    paste0("  ", f$year[i], " ", f$season[i], " (t = ", f$t[i], ") = ", full_digits(f$prediction[i])), character(1)))
+}
+
+# INTERNAL: says in plain words if a trend line goes UP, DOWN or is FLAT, how much it
+# changes, and how strong the line is (R^2). Used by every function that gives a trend.
+describe_trend <- function(a, b, n, r2 = NA) {
+  first <- a + b; last <- a + b * n
+  dir <- if (abs(b) < 1e-12) "FLAT (horizontal): there is no trend, the trend is centred around a constant"
+  else if (b > 0) "GOES UP  (increasing trend)" else "GOES DOWN  (decreasing trend)"
+  cat("  TREND DIRECTION : ", dir, "\n", sep = "")
+  if (abs(b) >= 1e-12) {
+    cat("  CHANGE          : ", if (b > 0) "+" else "-", full_digits(abs(b)), " per period;  from t = 1 (", full_digits(first),
+        ") to t = ", n, " (", full_digits(last), "): ", if (b > 0) "+" else "-", full_digits(abs(last - first)),
+        if (first != 0) paste0("  (", full_digits(100 * (last - first) / abs(first)), " % of the first value)") else "", "\n", sep = "")
   }
-  if (!is.null(predict_x_at)) {
-    report_section(paste0("Predictions of ", xn))
-    for (v in predict_x_at) report_line(paste0("When ", yn, " = ", full_digits(v), ", predicted ", xn),
-                                        xy$a + xy$b * v)
+  if (!is.na(r2)) {
+    cat("  STRENGTH        : R^2 = ", full_digits(r2), "  -> ",
+        if (r2 >= 0.7) "the line follows the data well: the direction is CLEAR"
+        else if (r2 >= 0.3) "MODERATE: the direction is visible but the data move a lot around the line"
+        else "WEAK: the line explains little, the trend is almost flat compared with the ups and downs of the data", "\n", sep = "")
   }
-  final_box(paste0("FINAL RESULTS:  ", yn, " and ", xn), c(
-    paste0("REGRESSION LINE 1  R_Y/X:  ", yn, " = ", full_digits(yx$a), signed_full(yx$b), " * ", xn),
-    box_line("  INTERCEPT a", yx$a),
-    box_line("  SLOPE b", yx$b),
-    "",
-    paste0("REGRESSION LINE 2  R_X/Y:  ", xn, " = ", full_digits(xy$a), signed_full(xy$b), " * ", yn),
-    box_line("  INTERCEPT a'", xy$a),
-    box_line("  SLOPE b'", xy$b),
-    "",
-    box_line("Cov(X,Y)", cv),
-    box_line("r", r),
-    box_line("R^2", r^2),
-    paste0("Relationship: ", describe_correlation(r)),
-    if (!is.null(predict_y_at)) c("", vapply(predict_y_at, function(v) box_line(paste0("Predicted ", yn, " when ", xn, " = ", full_digits(v)), yx$a + yx$b * v), character(1))),
-    if (!is.null(predict_x_at)) c("", vapply(predict_x_at, function(v) box_line(paste0("Predicted ", xn, " when ", yn, " = ", full_digits(v)), xy$a + xy$b * v), character(1)))))
-  if (plot) plot_regression_lines(x, y, n, TRUE,
-                                  main = paste0(yn, " vs ", xn, " with regression lines"),
-                                  x_name = xn, y_name = yn)
-  invisible(list(y_on_x = yx, x_on_y = xy, covariance = cv, r = r,
-                 r_squared = r^2, N = N))
 }
 
 # -----------------------------------------------------------------------------
-# analyze_table(table, x_values = NULL, y_values = NULL,
-#               x_limits = NULL, y_limits = NULL, rows_are = "X",
-#               x_name = "X", y_name = "Y", given_x = NULL, given_y = NULL,
-#               predict_y_at = NULL, predict_x_at = NULL, plot = TRUE)
+# moving_average(x, k, labels = NULL, name = NULL, plot = TRUE)
 # -----------------------------------------------------------------------------
-# WHAT IT DOES : Complete analysis of a two-way frequency table in ONE call:
-#                joint absolute and relative tables with their totals,
-#                marginal distributions of X and of Y (mean, variance, sd),
-#                independence check, optional conditional distributions,
-#                covariance, correlation, both regression lines,
-#                optional PREDICTIONS (see predict_y_at / predict_x_at),
-#                and the plot.
-#                Internally it converts the table with table_to_pairs() and
-#                runs linear_regression() on the pairs, so the predictions
-#                are exactly the ones of those two functions.
+# WHAT IT DOES : CASE: "Calculate the moving averages of order k" or "find the
+#                trend using moving averages". Gives the moving average of
+#                order k of a series, centred (placed at the middle period),
+#                with ALL the decimals, and draws the series with its moving
+#                average. If k is ODD each value is the plain mean of k
+#                consecutive data. If k is EVEN the two extreme values count
+#                half (x 0.5) so the result is centred (as in the slides).
+#                It also shows how the first value was computed.
+# FORMULA (for reference — matches the slides' notation):
+#   k odd :  Y_t = (X_{t-h} + ... + X_{t+h}) / k             with h = (k-1)/2
+#   k even:  Y_t = (0.5 X_{t-h} + X_{t-h+1} + ... + X_{t+h-1} + 0.5 X_{t+h}) / k
+#            with h = k/2
 # PARAMETERS   :
-#   table    : matrix of absolute frequencies.
-#   x_values, y_values : the value of X for each row of the table and the
-#              value of Y for each column (class marks if grouped).
-#              If omitted they are taken from the row/column names.
-#   x_limits, y_limits : instead of values, give the interval BOUNDARIES
-#              (one more than rows/columns), e.g. c(150,160,170,180); the
-#              class marks are computed for you.
-#   rows_are : "X" (default) if the rows of your table are X and the columns Y.
-#              "Y" if the rows are Y (typical "Y/X" tables): it is transposed.
-#   x_name, y_name : names to show.
-#   given_x  : (optional) value(s) of X: shows the distribution of Y given X.
-#   given_y  : (optional) value(s) of Y: shows the distribution of X given Y.
-#   predict_y_at : (optional) value(s) of X at which to PREDICT Y with the
-#              regression line of Y on X. Leave it NULL to skip it. If your
-#              X is grouped in intervals, give the number itself (e.g. 165),
-#              not the interval.
-#   predict_x_at : (optional) value(s) of Y at which to PREDICT X with the
-#              regression line of X on Y.
+#   x      : the series, in time order (one value per period).
+#   k      : order of the moving average (3, 4, 5, 12 ...). Use the period of
+#            the seasonality if you know it (4 quarterly, 12 monthly).
+#   labels : (optional) names of the periods, e.g. 1959:1965. Default 1, 2, 3...
+#   name   : (optional) name of the variable for the report.
+#   plot   : FALSE to skip the plot.
+# RETURNS      : Invisibly, a data.frame with the period, X and the moving
+#                average (NA at the ends, where it cannot be computed).
+# EXAMPLE      :
+#   x <- c(6, 6.2, 5.1, 4.9, 5.2, 5.8, 7)
+#   moving_average(x, k = 3, labels = 1959:1965)   # 5.7667 5.4000 5.0667 5.3000 6.0000
+#   moving_average(x, k = 4, labels = 1959:1965)   # 5.45 5.30 5.49
+# -----------------------------------------------------------------------------
+moving_average <- function(x, k, labels = NULL, name = NULL, plot = TRUE) {
+  nm <- if (is.null(name)) variable_label(deparse(substitute(x)), "X") else name
+  x <- as.numeric(x)
+  n <- length(x)
+  if (is.null(labels)) labels <- seq_len(n)
+  if (length(labels) != n) stop("`labels` must have one entry per value of the series.")
+  if (k < 2) stop("The order k of the moving average must be 2 or more.")
+  if (k >= length(x)) stop("The order k (", k, ") must be smaller than the number of data (", length(x), ").")
+  w_ma <- if (k %% 2 == 1) rep(1, k) / k else c(0.5, rep(1, k - 1), 0.5) / k   # odd: plain mean; even: extremes x0.5
+  half_ma <- length(w_ma) %/% 2
+  ma <- rep(NA_real_, length(x))
+  for (i_ma in (half_ma + 1):(length(x) - half_ma)) ma[i_ma] <- sum(w_ma * x[(i_ma - half_ma):(i_ma + half_ma)])
+  report_title(paste0("MOVING AVERAGE OF ORDER ", k, ":  ", nm))
+  report_line("Number of observations (N)", n)
+  report_line("Values that can be computed", sum(!is.na(ma)))
+  cat("  Order ", k, if (k %% 2 == 1) " is ODD: each value is the mean of the k values around it.\n"
+      else " is EVEN: the average uses k + 1 values and the two extremes count x 0.5 (to centre it).\n", sep = "")
+  cat("  The first ", k %/% 2, " and the last ", k %/% 2, " periods are lost (no moving average there).\n", sep = "")
+  report_section("Moving average")
+  tab <- data.frame(period = labels, X = x, moving_average = ma)
+  print(tab, row.names = FALSE, na.print = "-")
+  first <- which(!is.na(ma))[1]
+  half <- if (k %% 2 == 1) k %/% 2 else k / 2
+  w <- if (k %% 2 == 1) rep(1, k) else c(0.5, rep(1, k - 1), 0.5)
+  terms <- paste0(ifelse(w == 1, "", paste0(full_digits(w), " * ")), full_digits(x[(first - half):(first + half)]))
+  report_section("How the first value was computed")
+  cat("  (", paste(terms, collapse = " + "), ") / ", k, " = ", full_digits(ma[first]),
+      "   -> assigned to period ", labels[first], "\n", sep = "")
+  ok_ma <- which(!is.na(ma))
+  shown <- head(ok_ma, 24)
+  final_box(paste0("MOVING AVERAGE OF ORDER ", k, ":  ", nm), c(
+    vapply(shown, function(i) paste0("MA(", labels[i], ") = ", full_digits(ma[i])), character(1)),
+    if (length(ok_ma) > length(shown)) paste0("... and ", length(ok_ma) - length(shown), " more (all of them are in the table above)"),
+    "",
+    paste0("Periods lost at each end: ", k %/% 2)))
+  if (plot) {
+    plot(seq_len(n), x, type = "b", pch = 19, col = "steelblue", xaxt = "n",
+         xlab = "period", ylab = nm, main = paste0("Moving average of order ", k))
+    axis(1, at = seq_len(n), labels = labels)
+    lines(seq_len(n), ma, type = "b", pch = 15, col = "firebrick", lwd = 2)
+    legend("topleft", legend = c(nm, paste0("moving average (", k, ")")),
+           col = c("steelblue", "firebrick"), pch = c(19, 15), lty = 1, bty = "n")
+  }
+  invisible(tab)
+}
+
+# -----------------------------------------------------------------------------
+# trend_line(x, labels = NULL, forecast = 0, name = NULL, plot = TRUE)
+# -----------------------------------------------------------------------------
+# WHAT IT DOES : CASE: "Find the trend of the series by least squares", "fit
+#                the regression line of the series" or "predict the next
+#                values with the trend" (series WITHOUT seasonality, or when
+#                they just ask for the straight-line trend). Numbers the
+#                periods t = 1, 2, 3, ... and fits X = a + b * t. Gives a, b,
+#                r, R^2, the errors, the trend value of each period, the
+#                prediction for the next periods and the plot.
+#                (If the series has seasons and the exercise asks for the TRUE
+#                trend, use decompose_series() instead: it fits the line to
+#                the deseasonalised series.)
+# FORMULA (for reference — matches the slides' notation):
+#   b = Cov(t, X) / Var(t)        a = mean(X) - b * mean(t)
+# PARAMETERS   :
+#   x        : the series, in time order.
+#   labels   : (optional) names of the periods (years, ...). Default 1, 2, 3...
+#   forecast : (optional) how many periods AFTER the last one to predict.
+#   name     : (optional) name of the variable.
 #   plot     : FALSE to skip the plot.
-# RETURNS      : Invisibly, a list with the (x, y, n) pairs, the results of
-#                the regression (see linear_regression) and `independent`.
+# RETURNS      : Invisibly, a list with a, b, r, r_squared, mse, trend
+#                (fitted values) and forecast.
 # EXAMPLE      :
-#   tab <- matrix(c(2,4,1, 0,4,6, 0,3,1), nrow = 3, byrow = TRUE)
-#   analyze_table(tab, x_limits = c(150,160,170,180), y_limits = c(50,60,70,80),
-#                 x_name = "height", y_name = "weight", given_x = 165)
-#   # + prediction of the weight of someone 172 cm tall:
-#   analyze_table(tab, x_limits = c(150,160,170,180), y_limits = c(50,60,70,80),
-#                 x_name = "height", y_name = "weight", predict_y_at = 172)
-#   # table of the exam (X = 1,2,3 ; Y = 0,1,2,3), predict Y when X = 2.5:
-#   tab <- matrix(c(8,5,2,0, 6,10,8,3, 1,4,7,6), nrow = 3, byrow = TRUE)
-#   analyze_table(tab, x_values = 1:3, y_values = 0:3, given_x = 2, predict_y_at = 2.5)
+#   trend_line(c(6, 6.2, 5.1, 4.9, 5.2, 5.8, 7), labels = 1959:1965, forecast = 2)
 # -----------------------------------------------------------------------------
-analyze_table <- function(table, x_values = NULL, y_values = NULL,
-                          x_limits = NULL, y_limits = NULL, rows_are = "X",
-                          x_name = "X", y_name = "Y", given_x = NULL,
-                          given_y = NULL, predict_y_at = NULL,
-                          predict_x_at = NULL, plot = TRUE) {
-  tab <- as.matrix(table)
-  if (toupper(rows_are) == "Y") {
-    tab <- t(tab)
-  } else if (toupper(rows_are) != "X") stop('`rows_are` must be "X" or "Y".')
-  # values / marks of each variable
-  get_marks <- function(values, limits, k, names_vec, what) {
-    if (!is.null(limits)) {
-      if (length(limits) != k + 1)
-        stop("Your table has ", nrow(tab), " rows and ", ncol(tab), " columns (rows are ", toupper(rows_are),
-             "). So `", what, "_limits` must have ", k + 1, " boundaries (one more than the number of ",
-             if (what == "x") "rows" else "columns", ") but you gave ", length(limits),
-             ". Check that `tab` is the table you mean and, if its rows are Y, use rows_are = \"Y\".")
-      return(list(v = class_mark(limits[-(k + 1)], limits[-1]),
-                  lab = interval_labels(limits[-(k + 1)], limits[-1], TRUE)))
+trend_line <- function(x, labels = NULL, forecast = 0, name = NULL, plot = TRUE) {
+  nm <- if (is.null(name)) variable_label(deparse(substitute(x)), "X") else name
+  x <- as.numeric(x); n <- length(x); t <- seq_len(n)
+  if (is.null(labels)) labels <- t
+  if (length(labels) != n) stop("`labels` must have one entry per value of the series.")
+  vt <- mean(t^2) - mean(t)^2
+  cv <- mean(t * x) - mean(t) * mean(x)
+  b <- cv / vt; a <- mean(x) - b * mean(t)
+  vx <- mean(x^2) - mean(x)^2
+  r <- if (vx > 0) cv / sqrt(vt * vx) else NA
+  fit <- a + b * t
+  mse <- mean((x - fit)^2)
+  report_title(paste0("TREND OF THE SERIES (least squares):  ", nm))
+  cat("  The periods are numbered t = 1, 2, ..., ", n, ".  Trend line:  ", nm, " = a + b * t\n", sep = "")
+  report_line("N (number of periods)", n)
+  report_section("Trend line")
+  cat("  ", nm, " = ", full_digits(a), signed_full_t(b), " * t\n", sep = "")
+  report_line("a  (intercept: trend value at t = 0)", a)
+  report_line(paste0("b  (slope: change of ", nm, " per period)"), b)
+  describe_trend(a, b, n, r^2)
+  report_section("Quality of the line")
+  report_line("r (correlation of t and the series)", r)
+  report_line("R^2 = r^2", r^2)
+  report_line("MSE (mean squared error)", mse)
+  report_line("RMSE", sqrt(mse))
+  report_section("Trend value of each period")
+  print(data.frame(period = labels, t = t, X = x, trend = fit), row.names = FALSE)
+  fc <- NULL
+  if (forecast > 0) {
+    tf <- n + seq_len(forecast)
+    flabels <- if (is.numeric(labels) && n > 1 && all(diff(labels) == diff(labels)[1]))
+      labels[n] + diff(labels)[1] * seq_len(forecast) else paste0("t=", tf)
+    fc <- data.frame(period = flabels, t = tf, prediction = a + b * tf)
+    report_section("Prediction with the trend line")
+    print(fc, row.names = FALSE)
+  }
+  final_box(paste0("TREND LINE:  ", nm), c(
+    box_trend(a, b, r^2, nm, "t"),
+    box_line("r", r),
+    box_line("MSE", mse),
+    if (!is.null(fc)) c("", "PREDICTION:", paste0("  ", fc$period, " (t = ", fc$t, ") = ", vapply(fc$prediction, full_digits, character(1))))))
+  if (plot) {
+    tt <- c(t, if (!is.null(fc)) fc$t)
+    plot(t, x, type = "b", pch = 19, col = "steelblue", xlim = range(tt),
+         ylim = range(c(x, fit, fc$prediction)), xlab = "t", ylab = nm,
+         main = paste0("Trend line of ", nm))
+    abline(a = a, b = b, col = "firebrick", lwd = 2)
+    if (!is.null(fc)) points(fc$t, fc$prediction, pch = 17, col = "darkgreen", cex = 1.3)
+    legend("topleft", legend = c(nm, "trend line", if (!is.null(fc)) "prediction"),
+           col = c("steelblue", "firebrick", if (!is.null(fc)) "darkgreen"),
+           pch = c(19, NA, if (!is.null(fc)) 17), lty = c(1, 1, if (!is.null(fc)) NA), bty = "n")
+  }
+  invisible(list(a = a, b = b, r = r, r_squared = r^2, mse = mse, trend = fit, forecast = fc))
+}
+
+# INTERNAL: " + 3.2" / " - 3.2" in front of a number (so we never print "+ -3.2")
+signed_full_t <- function(v) paste0(ifelse(v < 0, " - ", " + "), full_digits(abs(v)))
+
+# -----------------------------------------------------------------------------
+# decompose_series(x, period = NULL, start = NULL, model = "multiplicative",
+#                  season_names = NULL, forecast = 0, name = NULL, plot = TRUE)
+# -----------------------------------------------------------------------------
+# WHAT IT DOES : CASE: any exercise with a QUARTERLY / MONTHLY (seasonal)
+#                series: "calculate the trend-cycle", "the seasonal variation
+#                indices (corrected or not)", "the random component", "the
+#                deseasonalised series", "the regression line / true trend",
+#                "predict the next periods". ONE call gives everything:
+#                  1. Trend-cycle (T.C) by moving averages of order = period.
+#                  2. X / (T.C)  [or X - (T.C) if additive]  = E.A table.
+#                  3. Seasonal indices (average of each season), their sum
+#                     (should be 400 % for quarterly data) -> UNCORRECTED.
+#                  4. CORRECTED (normalised) seasonal indices, with the
+#                     interpretation of each season.
+#                  5. Random component A.
+#                  6. Deseasonalised series X / E.
+#                  7. Regression line of the deseasonalised series
+#                     (t = 1, 2, 3...): the TRUE (corrected) trend.
+#                  8. Prediction of future periods = trend x seasonal index.
+#                  9. The plots.
+# FORMULA (for reference — matches the slides' notation):
+#   Multiplicative X = T.E.C.A :  E.A = X/(T.C);  uncorrected index = mean of
+#       each season;  corrected I' = I * period / sum(I);  A = (X/(T.C)) / I';
+#       deseasonalised = X / I';  prediction = (a + b t) * I'.
+#   Additive X = T+E+C+A :  E+A = X-(T.C);  corrected I' = I - mean(I)
+#       (they must add 0);  A = (X-(T.C)) - I';  deseasonalised = X - I';
+#       prediction = (a + b t) + I'.
+# PARAMETERS   :
+#   x            : EITHER a table/matrix (rows = years, columns = seasons;
+#                  type it row by row with byrow = TRUE and put the years as
+#                  row names) OR a plain vector in time order.
+#   period       : only if x is a vector: HOW MANY DATA THERE ARE IN ONE SEASONAL CYCLE
+#                  (usually in one year) = the number of columns of the table:
+#                    quarterly data  (trimestral, Q1..Q4)        -> period = 4
+#                    four-month data (cuatrimestral)             -> period = 3
+#                    half-year data  (semestral)                 -> period = 2
+#                    bimonthly data  (bimestral, every 2 months) -> period = 6
+#                    monthly data                                -> period = 12
+#                    daily data with a weekly cycle (Mon..Sun)   -> period = 7
+#                    hourly data with a daily cycle              -> period = 24
+#                  Careful: in Spanish a "trimestre" lasts 3 months, so a year
+#                  has 4 of them (period 4); a "cuatrimestre" lasts 4 months, so
+#                  a year has 3 of them (period 3). The period is NOT the length
+#                  of each season: it is how many seasons fit in the cycle.
+#   start        : only if x is a vector: c(first year, first season),
+#                  e.g. c(1980, 1). Default c(1, 1).
+#   model        : "multiplicative" (default, X = T.E.C.A) or "additive".
+#   season_names : (optional) names of the seasons. Default: the column names
+#                  of the table, or Q1..Q4 / Jan..Dec.
+#   forecast     : (optional) number of future periods to predict.
+#   name         : (optional) name of the variable.
+#   plot         : FALSE to skip the plots.
+# RETURNS      : Invisibly, a list with trend_cycle, ratio (E.A), raw_indices,
+#                indices (corrected), random, deseasonalised, a, b,
+#                true_trend and forecast.
+# EXAMPLE      :  (the "Muja company" quarterly production, 1980-1984)
+#   tab <- matrix(c(178.2,153.2,185.9,163.6, 196.3,156.9,197.9,166.4,
+#                   197.3,159.7,202.6,175.6, 209.5,169.5,202.4,179.8,
+#                   200.0,168.6,216.1,178.5), ncol = 4, byrow = TRUE,
+#                 dimnames = list(1980:1984, c("Spring","Summer","Autumn","Winter")))
+#   decompose_series(tab)                 # corrected indices 109.1606 %, 88.2746 %, ...
+#   decompose_series(tab, forecast = 4)   # + production of 1985
+# -----------------------------------------------------------------------------
+decompose_series <- function(x, period = NULL, start = NULL, model = "multiplicative",
+                             season_names = NULL, forecast = 0, name = NULL, plot = TRUE) {
+  nm <- if (is.null(name)) variable_label(deparse(substitute(x)), "X") else name
+  model <- match.arg(model, c("multiplicative", "additive"))
+  mult <- model == "multiplicative"
+  L <- series_layout(x, period, start, season_names)
+  p <- L$period; n <- L$n; v <- L$values
+  if (p < 2) stop("The period must be 2 or more.")
+  if (n < 2 * p) stop("At least two full periods (", 2 * p, " data) are needed.")
+  if (p >= length(v)) stop("The order k (", p, ") must be smaller than the number of data (", length(v), ").")
+  w_tc <- if (p %% 2 == 1) rep(1, p) / p else c(0.5, rep(1, p - 1), 0.5) / p   # odd: plain mean; even: extremes x0.5
+  half_tc <- length(w_tc) %/% 2
+  tc <- rep(NA_real_, length(v))
+  for (i_tc in (half_tc + 1):(length(v) - half_tc)) tc[i_tc] <- sum(w_tc * v[(i_tc - half_tc):(i_tc + half_tc)])
+  # tc = trend-cycle (centred moving average of order p)
+  ea  <- if (mult) v / tc else v - tc                       # E.A
+  raw <- vapply(seq_len(p), function(s) mean(ea[L$season == s], na.rm = TRUE), numeric(1))
+  idx <- if (mult) raw * p / sum(raw) else raw - mean(raw)  # corrected
+  names(raw) <- names(idx) <- L$season_names
+  I   <- idx[L$season]
+  a_c <- if (mult) ea / I else ea - I                       # random component
+  des <- if (mult) v / I else v - I                         # deseasonalised
+  t   <- seq_len(n)
+  vt  <- mean(t^2) - mean(t)^2
+  b   <- (mean(t * des) - mean(t) * mean(des)) / vt
+  a   <- mean(des) - b * mean(t)
+  tt  <- a + b * t                                          # true trend
+  r   <- (mean(t * des) - mean(t) * mean(des)) / sqrt(vt * (mean(des^2) - mean(des)^2))
+  unit <- if (mult) 100 else 1
+  
+  report_title(paste0("TIME SERIES DECOMPOSITION (", model, "):  ", nm))
+  report_line("Number of observations (N)", n)
+  report_line("Period of the seasonality", p)
+  cat("  Model: ", if (mult) "X = T . E . C . A  (multiplicative)" else "X = T + E + C + A  (additive)", "\n", sep = "")
+  
+  report_section(paste0("1. Trend-cycle T.C  (moving average of order ", p, if (p %% 2 == 0) ", extremes x 0.5)" else ")"))
+  show_table(as_table(tc, L))
+  cat("  (The first and last ", p %/% 2, " periods are lost.)\n", sep = "")
+  
+  report_section(paste0("2. ", if (mult) "E.A = X / (T.C)" else "E+A = X - (T.C)", "   (seasonal and random components)"))
+  show_table(as_table(ea, L))
+  
+  report_section(paste0("3. Seasonal variation indices, UNCORRECTED (mean of each season", if (mult) ", in %)" else ")"))
+  print(raw * unit)
+  report_line(paste0("Sum of the indices (should be ", if (mult) paste0(p * 100, " %") else "0", ")"), sum(raw) * unit)
+  if (abs(sum(raw) * unit - (if (mult) p * 100 else 0)) < 1e-9) cat("  -> They already add up exactly, so the correction does not change them.\n")
+  else cat("  -> They do not add up exactly, so they must be corrected.\n")
+  
+  report_section(paste0("4. Seasonal variation indices, CORRECTED (normalised", if (mult) ", in %)" else ")"))
+  print(idx * unit)
+  report_line("Sum of the corrected indices", sum(idx) * unit)
+  cat("  Interpretation:\n")
+  for (s in seq_len(p)) {
+    if (mult) {
+      d <- idx[s] * 100 - 100
+      cat(sprintf("   - %s: index %s %%  ->  %s %% %s than the annual average\n", L$season_names[s],
+                  full_digits(idx[s] * 100), full_digits(abs(d)), if (d >= 0) "HIGHER" else "LOWER"))
+    } else {
+      cat(sprintf("   - %s: index %s  ->  %s %s the annual average\n", L$season_names[s],
+                  full_digits(idx[s]), full_digits(abs(idx[s])), if (idx[s] >= 0) "ABOVE" else "BELOW"))
     }
-    if (is.null(values)) {
-      values <- suppressWarnings(as.numeric(names_vec))
-      if (is.null(names_vec) || anyNA(values))
-        stop("Give `", what, "_values` (one per ", if (what == "x") "row" else "column",
-             ") or `", what, "_limits`.")
-    }
-    if (length(values) != k) stop("`", what, "_values` must have ", k, " values.")
-    list(v = values, lab = full_digits(values))
   }
-  # if the user gave values/limits for X and Y in the ORIGINAL orientation, they
-  # already refer to X and Y, so nothing else to swap
-  mx <- get_marks(x_values, x_limits, nrow(tab), rownames(tab), "x")
-  my <- get_marks(y_values, y_limits, ncol(tab), colnames(tab), "y")
-  xv <- mx$v; yv <- my$v
-  N <- sum(tab)
-  rel <- tab / N
-  ni <- rowSums(tab); nj <- colSums(tab)
   
-  report_title(paste0("TWO-WAY TABLE ANALYSIS:  ", x_name, " (rows) and ", y_name, " (columns)"))
-  show_tab <- function(m) {
-    full <- rbind(cbind(m, Total = rowSums(m)), Total = c(colSums(m), sum(m)))
-    dimnames(full) <- list(c(mx$lab, "Total"), c(my$lab, "Total"))
-    print(full)
+  report_section(paste0("5. Random component A  (", if (mult) "(X/(T.C)) / corrected index; ideally close to 1" else "(X-(T.C)) - corrected index; ideally close to 0", ")"))
+  show_table(as_table(a_c, L))
+  
+  report_section(paste0("6. Deseasonalised series  ", if (mult) "X / E = T.C.A" else "X - E = T+C+A"))
+  show_table(as_table(des, L))
+  
+  report_section("7. Regression line of the deseasonalised series (t = 1, 2, ..., N)  = TRUE TREND")
+  cat("  deseasonalised X = a + b * t\n  deseasonalised X = ", full_digits(a), signed_full_t(b), " * t\n", sep = "")
+  report_line("a  (intercept)", a)
+  report_line("b  (slope: change of the trend per period)", b)
+  report_line("r (correlation of t and the deseasonalised series)", r)
+  report_line("R^2 = r^2", r^2)
+  describe_trend(a, b, n, r^2)
+  report_section("   True (corrected) trend T of each period = a + b * t")
+  show_table(as_table(tt, L))
+  
+  fc <- NULL
+  if (forecast > 0) {
+    tf <- n + seq_len(forecast)
+    idx0 <- (L$start_season - 1) + (tf - 1)
+    sf <- idx0 %% p + 1
+    yf <- L$first_year + idx0 %/% p
+    pred <- if (mult) (a + b * tf) * idx[sf] else (a + b * tf) + idx[sf]
+    fc <- data.frame(year = yf, season = L$season_names[sf], t = tf,
+                     trend = a + b * tf, seasonal_index = unname(idx[sf]), prediction = pred)
+    report_section(paste0("8. Prediction = trend ", if (mult) "x" else "+", " corrected seasonal index"))
+    print(fc, row.names = FALSE)
   }
-  report_section(paste0("Joint absolute frequencies (rows = ", x_name, ", columns = ", y_name, ")"))
-  show_tab(tab)
-  report_section("Joint relative frequencies (absolute / N)")
-  show_tab(rel)
   
-  marg <- function(vals, freq, nm) {
-    report_section(paste0("Marginal distribution of ", nm))
-    report_line(paste0("Mean of ", nm), arithmetic_mean(vals, freq))
-    report_line(paste0("Variance of ", nm, " (divides by N)"), variance(vals, freq))
-    report_line(paste0("Standard deviation of ", nm), standard_deviation(vals, freq))
-    report_line(paste0("Sample variance of ", nm, " (divides by N - 1)"), sample_quasi_variance(vals, freq))
+  final_box(paste0("FINAL RESULTS (", model, "):  ", nm), c(
+    "CORRECTED SEASONAL INDICES:", box_seasons(L$season_names, idx, mult),
+    "",
+    "TRUE TREND (regression line of the deseasonalised series):",
+    box_trend(a, b, r^2, "T", "t"),
+    box_forecast(fc)))
+  if (plot) {
+    op <- par(mfrow = c(2, 2)); on.exit(par(op), add = TRUE)
+    plot(t, v, type = "l", col = "steelblue", xlab = "t", ylab = nm, main = "Series and trend-cycle")
+    lines(t, tc, col = "firebrick", lwd = 2)
+    legend("topleft", legend = c(nm, "trend-cycle"), col = c("steelblue", "firebrick"), lty = 1, bty = "n", cex = 0.8)
+    barplot(idx * unit, col = "steelblue", main = "Corrected seasonal indices", las = 2)
+    abline(h = if (mult) 100 else 0, lty = 2)
+    plot(t, a_c, type = "b", pch = 19, col = "gray30", xlab = "t", ylab = "A", main = "Random component")
+    abline(h = if (mult) 1 else 0, lty = 2)
+    plot(t, des, type = "l", col = "steelblue", xlab = "t", ylab = nm,
+         ylim = range(c(des, tt, if (!is.null(fc)) fc$prediction)), main = "Deseasonalised series and true trend")
+    abline(a = a, b = b, col = "firebrick", lwd = 2)
+    if (!is.null(fc)) points(fc$t, fc$prediction, pch = 17, col = "darkgreen")
   }
-  marg(xv, ni, x_name); marg(yv, nj, y_name)
-  
-  report_section("Independence")
-  expected <- outer(ni / N, nj / N)
-  gap <- max(abs(rel - expected))
-  indep <- gap <= 1e-8
-  report_line("Largest gap between f_ij and (f_i. * f_.j)", gap)
-  cat("  ->", if (indep) paste0(x_name, " and ", y_name, " are INDEPENDENT (f_ij = f_i. * f_.j in every cell)\n")
-      else paste0(x_name, " and ", y_name, " are NOT independent (the relative frequencies are not the product of the marginals)\n"))
-  
-  cond_lines <- character(0)
-  cond <- function(given, vals_given, lab_given, vals_other, lab_other, freq_fun, gname, oname) {
-    for (g in given) {
-      k <- which(abs(vals_given - g) < 1e-9)
-      if (length(k) == 0) {
-        k <- which(lab_given == as.character(g))
-        if (length(k) == 0) stop("The value ", g, " of ", gname, " is not in the table.")
-      }
-      f <- freq_fun(k[1])
-      report_section(paste0("Distribution of ", oname, " given ", gname, " = ", g))
-      df <- data.frame(value = lab_other, absolute = f, relative = f / sum(f))
-      names(df)[1] <- oname
-      print(df, row.names = FALSE)
-      report_line(paste0("Mean of ", oname, " given ", gname, " = ", g), arithmetic_mean(vals_other, f))
-      report_line(paste0("Variance of ", oname, " given ", gname, " = ", g), variance(vals_other, f))
-      cond_lines <<- c(cond_lines,
-                       box_line(paste0("Mean of ", oname, " given ", gname, " = ", g), arithmetic_mean(vals_other, f)),
-                       box_line(paste0("Variance of ", oname, " given ", gname, " = ", g), variance(vals_other, f)))
-    }
-  }
-  if (!is.null(given_x)) cond(given_x, xv, mx$lab, yv, my$lab, function(k) tab[k, ], x_name, y_name)
-  if (!is.null(given_y)) cond(given_y, yv, my$lab, xv, mx$lab, function(k) tab[, k], y_name, x_name)
-  
-  final_box(paste0("TABLE RESULTS:  ", x_name, " and ", y_name), c(
-    box_line("N (total frequency)", N),
-    box_line(paste0("Mean of ", x_name), arithmetic_mean(xv, ni)),
-    box_line(paste0("Mean of ", y_name), arithmetic_mean(yv, nj)),
-    box_line("Largest gap between f_ij and f_i. * f_.j", gap),
-    if (indep) paste0("CONCLUSION: ", x_name, " and ", y_name, " are INDEPENDENT")
-    else paste0("CONCLUSION: ", x_name, " and ", y_name, " are NOT independent"),
-    if (length(cond_lines) > 0) c("", cond_lines)))
-  # table -> (x, y, n) pairs, then the full linear regression (with the
-  # optional predictions) on those pairs
-  pairs <- table_to_pairs(tab, xv, yv)
-  res <- linear_regression(pairs$x, pairs$y, pairs$n, x_name = x_name, y_name = y_name,
-                           predict_y_at = predict_y_at, predict_x_at = predict_x_at,
-                           plot = plot)
-  invisible(c(list(pairs = pairs, independent = indep, N = N), res))
+  invisible(list(trend_cycle = as_table(tc, L), ratio = as_table(ea, L), raw_indices = raw,
+                 indices = idx, random = as_table(a_c, L), deseasonalised = as_table(des, L),
+                 a = a, b = b, r = r, true_trend = as_table(tt, L), forecast = fc))
 }
 
 # -----------------------------------------------------------------------------
-# analyze_regression_lines(line1, line2, vars = c("x", "y"),
-#      var_x = NULL, var_y = NULL, sd_x = NULL, sd_y = NULL, N = NULL,
-#      remove = NULL, add = NULL, predict_y_at = NULL, predict_x_at = NULL,
-#      line1_is = NULL)
+# time_series_components(x, period = NULL, start = NULL, model = "multiplicative",
+#                        season_names = NULL, forecast = 0, name = NULL, plot = TRUE)
 # -----------------------------------------------------------------------------
-# WHAT IT DOES : For exercises where you are GIVEN the two regression lines
-#                as equations. It finds which one is y-on-x and which is
-#                x-on-y, the point where they cross (the means), the
-#                correlation coefficient, and, if you give a variance or sd,
-#                the other variances and the covariance. With N and
-#                remove/add it recomputes everything after taking out or
-#                adding an observation.
-# PARAMETERS   :
-#   line1, line2 : the equations as text, e.g. "2*x - 3*y + 1 = 0" or
-#                  "y = 3 + 0.5*x" ("3x" without * also works).
-#   vars         : the two letters used in the equations: c(X name, Y name).
-#   var_x, var_y, sd_x, sd_y : (optional) a known variance / standard
-#                  deviation (divided by N). One is enough.
-#   N            : (optional) number of observations (needed for remove/add).
-#   remove, add  : (optional) c(x, y) of one observation to remove / add.
-#   predict_y_at, predict_x_at : (optional) predictions.
-#   line1_is     : "Y/X" or "X/Y" if you already know which line line1 is.
-# RETURNS      : Invisibly, a list with the results.
+# WHAT IT DOES : CASE: "Find the components T, E, C and A of the series" /
+#                "apply the multiplicative (or additive) hypothesis". SHORT
+#                version of decompose_series(): it gives ONLY the four
+#                components and checks that they rebuild the series.
+#                  T = trend            (line a + b*t of the deseasonalised series)
+#                  E = seasonal index   (one per season, corrected)
+#                  C = cycle            (C = TC / T,  TC = moving average of order = period)
+#                  A = random component (A = X / (T * E * C))
+#                Then it rebuilds X = T * E * C * A (multiplicative) or
+#                X = T + E + C + A (additive) period by period.
+#                The first and last period/2 periods have no C and no A (the
+#                moving average is lost there).
+# PARAMETERS   : the same as decompose_series().
+#   period       : how many data there are in ONE seasonal cycle (see the list in
+#                  decompose_series): quarterly = 4, four-month = 3, half-year = 2,
+#                  bimonthly = 6, monthly = 12, daily with weekly cycle = 7.
+#   x, period, start, season_names : the series (vector + period, or a table
+#                                    with years as rows and seasons as columns).
+#   model        : "multiplicative" (default) or "additive".
+#   forecast     : (optional) number of future periods to predict. The
+#                  prediction uses T and E only (C and A are taken as neutral).
+# RETURNS      : Invisibly, a data.frame with t, X, TC, T, E, C, A and rebuilt X.
 # EXAMPLE      :
-#   analyze_regression_lines("y = 0.5 + 0.8*x", "x = 1 + 0.5*y")
-#   analyze_regression_lines("3*x + 2*y = 20", "x + 4*y = 15", sd_x = 2,
-#                            N = 10, remove = c(4, 4))
+#   time_series_components(x, period = 4, start = c(1980, 1))
+#   time_series_components(tab, forecast = 4)
 # -----------------------------------------------------------------------------
-analyze_regression_lines <- function(line1, line2, vars = c("x", "y"),
-                                     var_x = NULL, var_y = NULL, sd_x = NULL, sd_y = NULL,
-                                     N = NULL, remove = NULL, add = NULL,
-                                     predict_y_at = NULL, predict_x_at = NULL,
-                                     line1_is = NULL) {
-  xn <- vars[1]; yn <- vars[2]
-  parse_line <- function(txt) {
-    sides <- strsplit(txt, "=", fixed = TRUE)[[1]]
-    if (length(sides) != 2) stop('Write each line with one "=", e.g. "3*x + 2*y = 20".')
-    fix <- function(s) gsub("([0-9.])\\s*([A-Za-z_])", "\\1*\\2", s)
-    f <- function(xx, yy) {
-      env <- setNames(list(xx, yy), vars)
-      eval(parse(text = fix(sides[1])), env) - eval(parse(text = fix(sides[2])), env)
-    }
-    c0 <- f(0, 0)
-    c(A = f(1, 0) - c0, B = f(0, 1) - c0, C = c0)     # A*x + B*y + C = 0
-  }
-  L1 <- parse_line(line1); L2 <- parse_line(line2)
-  tol <- 1e-12
-  # slope of y on x for a line, and of x on y
-  yx_ok <- function(L) abs(L["B"]) > tol
-  xy_ok <- function(L) abs(L["A"]) > tol
-  candidate <- function(Lyx, Lxy) {
-    if (!yx_ok(Lyx) || !xy_ok(Lxy)) return(NULL)
-    b  <- -Lyx["A"] / Lyx["B"]
-    bp <- -Lxy["B"] / Lxy["A"]
-    r2 <- b * bp
-    if (r2 >= -tol && r2 <= 1 + 1e-9) list(b = unname(b), bp = unname(bp), r2 = max(r2, 0)) else NULL
-  }
-  c1 <- candidate(L1, L2)   # line1 = y on x
-  c2 <- candidate(L2, L1)   # line2 = y on x
-  if (!is.null(line1_is)) {
-    if (toupper(line1_is) == "Y/X") c2 <- NULL else c1 <- NULL
-  }
-  if (is.null(c1) && is.null(c2))
-    stop("These two lines cannot be regression lines of the same data (the product of the two slopes b*b' must be between 0 and 1).")
-  if (!is.null(c1) && !is.null(c2) && abs(c1$r2 - 1) > 1e-9)
-    stop("Both assignments are possible; tell me which one is y on x with line1_is = \"Y/X\" or \"X/Y\".")
-  if (!is.null(c1)) { Lyx <- L1; Lxy <- L2; cc <- c1; yx_name <- "line 1"; xy_name <- "line 2" }
-  else { Lyx <- L2; Lxy <- L1; cc <- c2; yx_name <- "line 2"; xy_name <- "line 1" }
-  b <- cc$b; bp <- cc$bp
-  a  <- -unname(Lyx["C"]) / unname(Lyx["B"])         # y = a + b x
-  ap <- -unname(Lxy["C"]) / unname(Lxy["A"])         # x = a' + b' y
-  r <- sign(b) * sqrt(cc$r2)
-  # intersection = (mean x, mean y)
-  M <- rbind(c(Lyx["A"], Lyx["B"]), c(Lxy["A"], Lxy["B"]))
-  cen <- solve(M, -c(Lyx["C"], Lxy["C"]))
-  mx <- unname(cen[1]); my <- unname(cen[2])
+time_series_components <- function(x, period = NULL, start = NULL, model = "multiplicative",
+                                   season_names = NULL, forecast = 0, name = NULL, plot = TRUE) {
+  nm <- if (is.null(name)) variable_label(deparse(substitute(x)), "X") else name
+  model <- match.arg(model, c("multiplicative", "additive"))
+  mult <- model == "multiplicative"
+  L <- series_layout(x, period, start, season_names)
+  n <- L$n; p <- L$period; v <- L$values
+  invisible(capture.output(res <- decompose_series(x, period = period, start = start, model = model,
+                                                   season_names = season_names, forecast = forecast,
+                                                   name = nm, plot = FALSE)))
+  pick <- function(m) m[cbind(L$row, L$col)]
+  tc  <- pick(res$trend_cycle)
+  tr  <- pick(res$true_trend)
+  E   <- unname(res$indices[L$season])
+  C   <- if (mult) tc / tr else tc - tr
+  A   <- if (mult) v / (tr * E * C) else v - tr - E - C
+  rebuilt <- if (mult) tr * E * C * A else tr + E + C + A
+  lab <- paste(L$year, L$season_names[L$season])
+  out <- data.frame(period = lab, t = seq_len(n), X = v, TC = tc, T = tr, E = E, C = C, A = A,
+                    rebuilt = rebuilt, stringsAsFactors = FALSE)
   
-  report_title("REGRESSION LINES ANALYSIS (given equations)")
-  report_section("Which line is which")
-  cat(sprintf("  %s is the regression of %s on %s:  %s = %s%s * %s\n", yx_name, yn, xn, yn,
-              full_digits(a), signed_full(b), xn))
-  cat(sprintf("  %s is the regression of %s on %s:  %s = %s%s * %s\n", xy_name, xn, yn, xn,
-              full_digits(ap), signed_full(bp), yn))
-  cat("  (rule: the two slopes satisfy b * b' = r^2 <= 1, which identifies each line)\n")
-  report_section("Results")
-  report_line(paste0("Slope of ", yn, " on ", xn, " (b)"), b)
-  report_line(paste0("Slope of ", xn, " on ", yn, " (b')"), bp)
-  report_line("R^2 = b * b'", cc$r2)
-  report_line("Correlation coefficient r (sign = sign of the slopes)", r)
-  if (cc$r2 > 0) cat(sprintf("  %-62s %s\n", "", paste("->", describe_correlation(r))))
-  report_line(paste0("Mean of ", xn, " (the two lines cross at the means)"), mx)
-  report_line(paste0("Mean of ", yn), my)
+  bar <- strrep("=", 72)
+  report_title(paste0("TIME SERIES COMPONENTS (", model, " hypothesis):  ", nm))
+  cat("  ", if (mult) "X = T . E . C . A" else "X = T + E + C + A", "      (N = ", n, ", period = ", p, ")\n", sep = "")
+  cat("\n  T  TREND       T = a + b * t  (regression line of the deseasonalised series)\n")
+  cat("     T = ", full_digits(res$a), signed_full_t(res$b), " * t\n", sep = "")
+  describe_trend(res$a, res$b, n, res$r^2)
+  cat("  E  SEASONAL    one corrected index per season",
+      if (mult) " (multiplicative: they average 1)" else " (additive: they add up to 0)", "\n", sep = "")
+  for (s in seq_len(p))
+    cat(sprintf("       %-8s E = %s\n", L$season_names[s], full_digits(unname(res$indices[s]))))
+  cat("  C  CYCLE       C = ", if (mult) "TC / T" else "TC - T",
+      "   where TC = moving average of order ", p, "\n", sep = "")
+  cat("  A  RANDOM      A = ", if (mult) "X / (T * E * C)" else "X - T - E - C", "\n", sep = "")
   
-  # variances
-  vx <- vy <- cv <- NULL
-  if (!is.null(sd_x)) var_x <- sd_x^2
-  if (!is.null(sd_y)) var_y <- sd_y^2
-  if (!is.null(var_x)) { vx <- var_x; cv <- b * vx; vy <- if (abs(bp) > tol) cv / bp else NA }
-  else if (!is.null(var_y)) { vy <- var_y; cv <- bp * vy; vx <- if (abs(b) > tol) cv / b else NA }
-  if (!is.null(vx)) {
-    report_section("Variances and covariance (from the data you gave)")
-    report_line(paste0("Variance of ", xn), vx)
-    report_line(paste0("Variance of ", yn), vy)
-    report_line(paste0("Standard deviation of ", xn), sqrt(vx))
-    report_line(paste0("Standard deviation of ", yn), sqrt(vy))
-    report_line("Covariance (b * variance of x = b' * variance of y)", cv)
-  } else if (cc$r2 > 0) {
-    report_section("Ratio of spreads")
-    report_line(paste0("sd(", yn, ") / sd(", xn, ") = b / r"), b / r)
-    cat("  (give var_x, var_y, sd_x or sd_y to get the variances and covariance)\n")
+  cat("\n", strrep("-", 72), "\n COMPONENTS OF EACH PERIOD\n", strrep("-", 72), "\n", sep = "")
+  fmt <- function(z) ifelse(is.na(z), "-", vapply(z, full_digits, character(1)))
+  m <- cbind(X = fmt(out$X), T = fmt(out$T), E = fmt(out$E), C = fmt(out$C), A = fmt(out$A),
+             rebuilt = fmt(out$rebuilt))
+  rownames(m) <- lab
+  colnames(m)[6] <- if (mult) "T*E*C*A" else "T+E+C+A"
+  print(m, quote = FALSE, right = TRUE)
+  ok <- !is.na(rebuilt)
+  cat("\n  Check: ", if (mult) "T*E*C*A" else "T+E+C+A", " rebuilds X in the ", sum(ok),
+      " periods where C and A exist (largest difference = ",
+      full_digits(max(abs(rebuilt[ok] - v[ok]))), ").\n", sep = "")
+  cat("  The other ", sum(!ok), " periods (the first and last ", p %/% 2,
+      ") have no C and no A, because the moving average is lost there.\n", sep = "")
+  
+  if (!is.null(res$forecast)) {
+    cat("\n", strrep("-", 72), "\n PREDICTION  (", if (mult) "T * E" else "T + E",
+        ": C and A are taken as neutral)\n", strrep("-", 72), "\n", sep = "")
+    f <- res$forecast
+    pm <- cbind(T = fmt(f$trend), E = fmt(f$seasonal_index), prediction = fmt(f$prediction))
+    rownames(pm) <- paste(f$year, f$season)
+    print(pm, quote = FALSE, right = TRUE)
   }
   
-  if (!is.null(predict_y_at)) {
-    report_section(paste0("Predictions of ", yn))
-    for (v in predict_y_at) report_line(paste0("When ", xn, " = ", full_digits(v), ", predicted ", yn), a + b * v)
-  }
-  if (!is.null(predict_x_at)) {
-    report_section(paste0("Predictions of ", xn))
-    for (v in predict_x_at) report_line(paste0("When ", yn, " = ", full_digits(v), ", predicted ", xn), ap + bp * v)
-  }
-  
-  final_box("FINAL RESULTS: REGRESSION LINES", c(
-    paste0(yx_name, " is R_Y/X:  ", yn, " = ", full_digits(a), signed_full(b), " * ", xn),
-    paste0(xy_name, " is R_X/Y:  ", xn, " = ", full_digits(ap), signed_full(bp), " * ", yn),
-    box_line("b (slope of Y on X)", b),
-    box_line("b' (slope of X on Y)", bp),
-    box_line("R^2 = b * b'", cc$r2),
-    box_line("r", r),
-    box_line(paste0("Mean of ", xn), mx),
-    box_line(paste0("Mean of ", yn), my),
-    if (!is.null(vx)) c(box_line(paste0("Variance of ", xn), vx), box_line(paste0("Variance of ", yn), vy), box_line("Covariance", cv)),
-    if (!is.null(predict_y_at)) c("", vapply(predict_y_at, function(v) box_line(paste0("Predicted ", yn, " when ", xn, " = ", full_digits(v)), a + b * v), character(1))),
-    if (!is.null(predict_x_at)) c("", vapply(predict_x_at, function(v) box_line(paste0("Predicted ", xn, " when ", yn, " = ", full_digits(v)), ap + bp * v), character(1)))))
-  out <- list(y_on_x = c(a = a, b = b), x_on_y = c(a = ap, b = bp), r = r,
-              r_squared = cc$r2, mean_x = mx, mean_y = my,
-              var_x = vx, var_y = vy, covariance = cv)
-  
-  # remove / add an observation
-  if (!is.null(remove) || !is.null(add)) {
-    if (is.null(N) || is.null(vx) || is.na(vx) || is.na(vy))
-      stop("To remove/add an observation I need N and a variance (var_x, var_y, sd_x or sd_y).")
-    Sx  <- N * mx;  Sy <- N * my
-    Sxx <- N * (vx + mx^2); Syy <- N * (vy + my^2); Sxy <- N * (cv + mx * my)
-    N2 <- N
-    if (!is.null(remove)) {
-      Sx <- Sx - remove[1]; Sy <- Sy - remove[2]; Sxx <- Sxx - remove[1]^2
-      Syy <- Syy - remove[2]^2; Sxy <- Sxy - remove[1] * remove[2]; N2 <- N2 - 1
-    }
-    if (!is.null(add)) {
-      Sx <- Sx + add[1]; Sy <- Sy + add[2]; Sxx <- Sxx + add[1]^2
-      Syy <- Syy + add[2]^2; Sxy <- Sxy + add[1] * add[2]; N2 <- N2 + 1
-    }
-    mx2 <- Sx / N2; my2 <- Sy / N2
-    vx2 <- Sxx / N2 - mx2^2; vy2 <- Syy / N2 - my2^2; cv2 <- Sxy / N2 - mx2 * my2
-    b2 <- cv2 / vx2; bp2 <- cv2 / vy2
-    report_section(paste0("After ", if (!is.null(remove)) paste0("removing (", paste(full_digits(remove), collapse = ", "), ")") else "",
-                          if (!is.null(remove) && !is.null(add)) " and " else "",
-                          if (!is.null(add)) paste0("adding (", paste(full_digits(add), collapse = ", "), ")") else ""))
-    report_line("New number of observations", N2)
-    report_line(paste0("New mean of ", xn), mx2)
-    report_line(paste0("New mean of ", yn), my2)
-    report_line(paste0("New variance of ", xn), vx2)
-    report_line(paste0("New variance of ", yn), vy2)
-    report_line("New covariance", cv2)
-    report_line("New correlation coefficient r", cv2 / sqrt(vx2 * vy2))
-    cat("  ", yn, " = ", full_digits(my2 - b2 * mx2), signed_full(b2), " * ", xn, "\n", sep = "")
-    cat("  ", xn, " = ", full_digits(mx2 - bp2 * my2), signed_full(bp2), " * ", yn, "\n", sep = "")
-    final_box("FINAL RESULTS AFTER THE CHANGE", c(
-      box_line("N", N2), box_line(paste0("Mean of ", xn), mx2), box_line(paste0("Mean of ", yn), my2),
-      box_line(paste0("Variance of ", xn), vx2), box_line(paste0("Variance of ", yn), vy2),
-      box_line("Covariance", cv2), box_line("r", cv2 / sqrt(vx2 * vy2)),
-      paste0(yn, " = ", full_digits(my2 - b2 * mx2), signed_full(b2), " * ", xn),
-      paste0(xn, " = ", full_digits(mx2 - bp2 * my2), signed_full(bp2), " * ", yn)))
-    out$after <- list(N = N2, mean_x = mx2, mean_y = my2, var_x = vx2, var_y = vy2,
-                      covariance = cv2, r = cv2 / sqrt(vx2 * vy2),
-                      y_on_x = c(a = my2 - b2 * mx2, b = b2),
-                      x_on_y = c(a = mx2 - bp2 * my2, b = bp2))
+  final_box(paste0("COMPONENTS ", if (mult) "T . E . C . A" else "T + E + C + A", ":  ", nm), c(
+    "T  TREND:", box_trend(res$a, res$b, res$r^2, "T", "t"),
+    "",
+    "E  SEASONAL INDICES (corrected):", box_seasons(L$season_names, res$indices, mult, "E"),
+    "",
+    paste0("C  CYCLE:  C = ", if (mult) "TC / T" else "TC - T", "   (see the table of each period)"),
+    paste0("A  RANDOM: A = ", if (mult) "X / (T * E * C)" else "X - T - E - C", "   (see the table of each period)"),
+    box_forecast(res$forecast)))
+  if (plot) {
+    xr <- c(1, n + max(forecast, 0))
+    plot(out$t, out$X, type = "b", pch = 19, col = "steelblue", xlim = xr, xlab = "t", ylab = nm,
+         main = "Series, trend-cycle and trend")
+    lines(out$t, out$TC, col = "darkgreen", lwd = 2)
+    tt <- seq(xr[1], xr[2]); lines(tt, res$a + res$b * tt, col = "firebrick", lwd = 2)
+    legend("topleft", legend = c(nm, "trend-cycle TC", "trend T"),
+           col = c("steelblue", "darkgreen", "firebrick"), lty = 1, bty = "n", cex = 0.8)
   }
   invisible(out)
 }
 
+# -----------------------------------------------------------------------------
+# time_series_steps(x, period = NULL, start = NULL, model = "multiplicative",
+#                   season_names = NULL, forecast = 0, name = NULL, plot = TRUE)
+# -----------------------------------------------------------------------------
+# WHAT IT DOES : CASE: "solve the whole exercise like in the slides". It does
+#                the complete decomposition STEP BY STEP, in the same order as
+#                the slides of Chapter 3. Each step says WHAT is done, the
+#                FORMULA, a WORKED EXAMPLE with your first numbers, and the
+#                RESULT table:
+#                  STEP 1  Trend-cycle T.C        (centred moving average, order = period)
+#                  STEP 2  Remove T.C             E.A = X / (T.C)
+#                  STEP 3  Seasonal indices       (mean of each season) + interpretation
+#                  STEP 4  Corrected indices      (normalised so they add up to 400 %)
+#                  STEP 5  Random component A     A = (E.A) / corrected index
+#                  STEP 6  Deseasonalised series  X / E
+#                  STEP 7  Regression line        deseasonalised X = a + b * t
+#                  STEP 8  True trend T           T = a + b * t of every period
+#                  STEP 9  Cycle C and check      C = TC / T,  X = T.E.C.A
+#                  STEP 10 Prediction (if forecast > 0)   trend x corrected index
+#                For the SHORT answers use time_series_components() (only
+#                T, E, C, A) or decompose_series() (all the tables, compact).
+# PARAMETERS   : the same as decompose_series().
+#   period       : how many data there are in ONE seasonal cycle (see the list in
+#                  decompose_series): quarterly = 4, four-month = 3, half-year = 2,
+#                  bimonthly = 6, monthly = 12, daily with weekly cycle = 7.
+#   x, period, start, season_names : the series (vector + period, or a table
+#                                    with years as rows and seasons as columns).
+#   model        : "multiplicative" (default) or "additive".
+#   forecast     : (optional) number of future periods to predict.
+#   plot         : FALSE to skip the plots.
+# RETURNS      : Invisibly, the same list as decompose_series().
+# EXAMPLE      :
+#   time_series_steps(x, period = 4, start = c(1980, 1), forecast = 4)
+#   time_series_steps(tab)                       # table years x seasons
+# -----------------------------------------------------------------------------
+time_series_steps <- function(x, period = NULL, start = NULL, model = "multiplicative",
+                              season_names = NULL, forecast = 0, name = NULL, plot = TRUE) {
+  nm <- if (is.null(name)) variable_label(deparse(substitute(x)), "X") else name
+  model <- match.arg(model, c("multiplicative", "additive"))
+  mult <- model == "multiplicative"
+  old_width <- options(width = max(getOption("width"), 150)); on.exit(options(old_width), add = TRUE)  # tables do not wrap
+  L <- series_layout(x, period, start, season_names)
+  n <- L$n; p <- L$period; v <- L$values
+  invisible(capture.output(res <- decompose_series(x, period = period, start = start, model = model,
+                                                   season_names = season_names, forecast = forecast,
+                                                   name = nm, plot = plot)))
+  pick <- function(m) m[cbind(L$row, L$col)]
+  tc <- pick(res$trend_cycle); ea <- pick(res$ratio); des <- pick(res$deseasonalised)
+  tr <- pick(res$true_trend);  ac <- pick(res$random)
+  idx <- res$indices; raw <- res$raw_indices
+  sn <- L$season_names
+  fm <- function(z) paste(vapply(z, full_digits, character(1)), collapse = ", ")
+  op <- if (mult) "/" else "-"
+  unit <- if (mult) 100 else 1
+  step <- function(num, title, what, formula = NULL) {
+    cat("\n", strrep("=", 72), "\n STEP ", num, ":  ", title, "\n", strrep("=", 72), "\n", sep = "")
+    cat("  WHAT WE DO : ", what, "\n", sep = "")
+    if (!is.null(formula)) cat("  FORMULA    : ", formula, "\n", sep = "")
+  }
+  
+  report_title(paste0("TIME SERIES, STEP BY STEP (", model, "):  ", nm))
+  cat("  Model: ", if (mult) "X = T . E . C . A" else "X = T + E + C + A",
+      "     T = trend, E = seasonal, C = cycle, A = random\n", sep = "")
+  report_line("Number of observations (N)", n)
+  report_line("Period of the seasonality", p)
+  cat("  The data, one row per year and one column per season:\n")
+  show_table(as_table(v, L))
+  
+  # STEP 1
+  step(1, paste0("T.C = MOVING AVERAGE of order ", p, " of X     [trend-cycle]"),
+       paste0("Smooth the series with a centred moving average of order ", p,
+              " (the period of the seasonality), which removes E and A."),
+       if (p %% 2 == 0) paste0("TC_t = (0.5 X_(t-", p %/% 2, ") + X_(t-", p %/% 2 - 1, ") + ... + X_(t+",
+                               p %/% 2 - 1, ") + 0.5 X_(t+", p %/% 2, ")) / ", p, "     (extremes x 0.5)")
+       else paste0("TC_t = (X_(t-", (p - 1) %/% 2, ") + ... + X_(t+", (p - 1) %/% 2, ")) / ", p))
+  i0 <- which(!is.na(tc))[1]; h <- p %/% 2
+  if (p %% 2 == 0) {
+    terms <- c(paste0("0.5*", full_digits(v[i0 - h])), vapply(v[(i0 - h + 1):(i0 + h - 1)], full_digits, character(1)),
+               paste0("0.5*", full_digits(v[i0 + h])))
+  } else terms <- vapply(v[(i0 - h):(i0 + h)], full_digits, character(1))
+  cat("  EXAMPLE    : first value (", L$year[i0], " ", sn[L$season[i0]], "):\n",
+      "               (", paste(terms, collapse = " + "), ") / ", p, " = ", full_digits(tc[i0]), "\n", sep = "")
+  cat("  >>> ANSWER  T.C =\n"); show_table(as_table(tc, L))
+  cat("  (The first and last ", h, " periods are lost: there are not enough data around them.)\n", sep = "")
+  tcv <- tc[!is.na(tc)]
+  cat("  TREND-CYCLE DIRECTION : from the first (", full_digits(tcv[1]), ") to the last (", full_digits(tcv[length(tcv)]),
+      ") value of T.C it ", if (tcv[length(tcv)] > tcv[1]) "GOES UP" else if (tcv[length(tcv)] < tcv[1]) "GOES DOWN" else "stays FLAT",
+      " (", if (tcv[length(tcv)] >= tcv[1]) "+" else "-", full_digits(abs(tcv[length(tcv)] - tcv[1])), ")\n", sep = "")
+  
+  # STEP 2
+  step(2, paste0("E.A = ", if (mult) "X / (T.C)" else "X - (T.C)", "     [remove the trend-cycle]"),
+       paste0(if (mult) "Divide the series by T.C (X / T.C)" else "Subtract T.C from the series (X - T.C)", ": only the seasonal and random components remain."),
+       if (mult) "X / (T.C) = (T.E.C.A) / (T.C) = E.A" else "X - (T+C) = E + A")
+  cat("  EXAMPLE    : ", L$year[i0], " ", sn[L$season[i0]], ":  ", full_digits(v[i0]), " ", op, " ",
+      full_digits(tc[i0]), " = ", full_digits(ea[i0]), "\n", sep = "")
+  cat("  >>> ANSWER  E.A =\n"); show_table(as_table(ea, L))
+  
+  # STEP 3
+  step(3, "E (uncorrected) = MEAN of E.A in each season     [seasonal indices]",
+       "Average each season over the years: this removes the random component A.",
+       "I_season = mean of the E.A values of that season")
+  s1 <- ea[L$season == 1 & !is.na(ea)]
+  cat("  EXAMPLE    : ", sn[1], ":  (", paste(vapply(s1, full_digits, character(1)), collapse = " + "), ") / ",
+      length(s1), " = ", full_digits(raw[1]), if (mult) paste0("  =>  ", full_digits(raw[1] * 100), " %") else "", "\n", sep = "")
+  cat("  TABLE      : the table E.A of step 2 with the mean of each column added at the bottom:\n")
+  m3 <- rbind(as_table(ea, L), `MEAN=index` = raw)
+  show_table(m3)
+  cat("  The indices", if (mult) " (in %)" else "", ":\n", sep = "")
+  for (k in seq_len(p)) cat(sprintf("     %-10s %s%s\n", sn[k], full_digits(raw[k] * unit), if (mult) " %" else ""))
+  report_line(paste0("Sum of the indices (should be ", if (mult) paste0(p * 100, " %") else "0", ")"), sum(raw) * unit)
+  if (abs(sum(raw) * unit - (if (mult) p * 100 else 0)) < 1e-9) {
+    cat("  -> The indices already add up exactly: step 4 will not change them (correction factor 1).\n")
+  } else cat("  -> The indices do not add up exactly, so they must be CORRECTED (step 4).\n")
+  cat("  >>> ANSWER  E (uncorrected seasonal indices) =\n")
+  for (k in seq_len(p)) cat(sprintf("        %-10s %s%s\n", sn[k], full_digits(raw[k]),
+                                    if (mult) paste0("   (", full_digits(raw[k] * 100), " %)") else ""))
+  
+  # STEP 4
+  step(4, paste0("E' = ", if (mult) paste0(p * 100, " / (sum of E in %) * E") else "E - mean(E)", "     [corrected / normalised indices]"),
+       paste0("Adjust the indices so that they add up exactly to ", if (mult) paste0(p * 100, " %") else "0", "."),
+       if (mult) paste0("I' = ", p * 100, " / (sum of the indices in %) * I") else "I' = I - mean(I)")
+  if (mult) {
+    cat("  EXAMPLE    : ", sn[1], ":  ", p * 100, " / ", full_digits(sum(raw) * 100), " * ", full_digits(raw[1] * 100),
+        " = ", full_digits(idx[1] * 100), " %\n", sep = "")
+  } else cat("  EXAMPLE    : ", sn[1], ":  ", full_digits(raw[1]), " - (", full_digits(mean(raw)), ") = ",
+             full_digits(idx[1]), "\n", sep = "")
+  if (mult) cat("  CORRECTION FACTOR : ", p * 100, " / ", full_digits(sum(raw) * 100), " = ", full_digits(p * 100 / (sum(raw) * 100)),
+                if (abs(sum(raw) * 100 - p * 100) < 1e-9) "   (the indices already added up: nothing changes)" else "", "\n", sep = "")
+  cat("  TABLE      : the indices before and after the correction", if (mult) " (in %)" else "", ":\n", sep = "")
+  m4 <- rbind(`uncorrected (step 3)` = raw * unit, `CORRECTED I'` = idx * unit)
+  colnames(m4) <- sn
+  print(m4)
+  report_line("Sum of the corrected indices", sum(idx) * unit)
+  cat("  NORMALISED TABLE  (the corrected index", if (mult) " in %" else "", " placed in every period; it is the E used in steps 5 and 6):\n", sep = "")
+  show_table(as_table(unname(idx[L$season]) * unit, L))
+  cat("  INTERPRETATION:\n")
+  for (k in seq_len(p)) {
+    if (mult) {
+      d <- idx[k] * 100 - 100
+      cat(sprintf("     %-10s %s %% %s than the annual average\n", sn[k], full_digits(abs(d)), if (d >= 0) "HIGHER" else "LOWER"))
+    } else cat(sprintf("     %-10s %s %s the annual average\n", sn[k], full_digits(abs(idx[k])), if (idx[k] >= 0) "ABOVE" else "BELOW"))
+  }
+  cat("  >>> ANSWER  E' (corrected seasonal indices) =\n")
+  for (k in seq_len(p)) cat(sprintf("        %-10s %s%s\n", sn[k], full_digits(idx[k]),
+                                    if (mult) paste0("   (", full_digits(idx[k] * 100), " %)") else ""))
+  
+  # STEP 5
+  step(5, paste0("A = ", if (mult) "(E.A) / E'" else "(E+A) - E'", "     [random component]"),
+       paste0("Remove the corrected seasonal index from E.A: what is left is A (it should be close to ", if (mult) "1" else "0", ")."),
+       if (mult) "A = (E.A) / I'" else "A = (E+A) - I'")
+  cat("  EXAMPLE    : ", L$year[i0], " ", sn[L$season[i0]], ":  ", full_digits(ea[i0]), " ", op, " ",
+      full_digits(idx[L$season[i0]]), " = ", full_digits(ac[i0]), "\n", sep = "")
+  cat("  >>> ANSWER  A =\n"); show_table(as_table(ac, L))
+  
+  # STEP 6
+  step(6, paste0(if (mult) "X / E' = T.C.A" else "X - E' = T+C+A", "     [deseasonalised series]"),
+       paste0("Remove the seasonal component from the ORIGINAL series (", if (mult) "divide" else "subtract", " by I')."),
+       if (mult) "X / E  = T.C.A" else "X - E = T+C+A")
+  cat("  EXAMPLE    : ", L$year[1], " ", sn[L$season[1]], ":  ", full_digits(v[1]), " ", op, " ",
+      full_digits(idx[L$season[1]]), " = ", full_digits(des[1]), "\n", sep = "")
+  cat("  >>> ANSWER  X", op, "E' =\n", sep = ""); show_table(as_table(des, L))
+  
+  # STEP 7
+  tt <- seq_len(n)
+  step(7, paste0(if (mult) "X / E'" else "X - E'", " = a + b*t     [regression line of the deseasonalised series]"),
+       paste0("Number the periods t = 1, ..., ", n, " and fit the least-squares line to the deseasonalised series."),
+       "deseasonalised X = a + b * t,     b = Cov(t, X/E) / Var(t),     a = mean(X/E) - b * mean(t)")
+  vt <- mean(tt^2) - mean(tt)^2; cvt <- mean(tt * des) - mean(tt) * mean(des)
+  cat("  NUMBERS    : mean(t) = ", full_digits(mean(tt)), ",  mean(X/E) = ", full_digits(mean(des)),
+      ",  Var(t) = ", full_digits(vt), ",  Cov(t, X/E) = ", full_digits(cvt), "\n", sep = "")
+  cat("               SLOPE b = ", full_digits(cvt), " / ", full_digits(vt), " = ", full_digits(res$b), "\n", sep = "")
+  cat("               INTERCEPT a = ", full_digits(mean(des)), " - (", full_digits(res$b), ") * ", full_digits(mean(tt)),
+      " = ", full_digits(res$a), "\n", sep = "")
+  answer_box(c(paste0(">>> ANSWER  STEP 7:  REGRESSION LINE"),
+               "",
+               paste0("X", op, "E' = ", full_digits(res$a), signed_full_t(res$b), " * t"),
+               "",
+               paste0("INTERCEPT  a = ", full_digits(res$a), "   (value of the line at t = 0)"),
+               paste0("SLOPE      b = ", full_digits(res$b), "   (change per period)")))
+  report_line("INTERCEPT  a", res$a)
+  report_line("SLOPE      b", res$b)
+  report_line("r (correlation of t and X/E)", res$r)
+  report_line("R^2 = r^2", res$r^2)
+  describe_trend(res$a, res$b, n, res$r^2)
+  
+  # STEP 8
+  step(8, "T = a + b*t     [true (corrected) trend]",
+       "Evaluate the regression line at the t of every period.", "T_t = a + b * t")
+  cat("  EXAMPLE    : t = 1 (", L$year[1], " ", sn[L$season[1]], "):  ", full_digits(res$a), signed_full_t(res$b),
+      " * 1 = ", full_digits(tr[1]), "\n", sep = "")
+  cat("  >>> ANSWER  T =\n"); show_table(as_table(tr, L))
+  describe_trend(res$a, res$b, n, res$r^2)
+  
+  # STEP 9
+  cyc <- if (mult) tc / tr else tc - tr
+  rebuilt <- if (mult) tr * idx[L$season] * cyc * ac else tr + idx[L$season] + cyc + ac
+  step(9, paste0("C = ", if (mult) "(T.C) / T" else "(T.C) - T", ";   X = ", if (mult) "T.E.C.A" else "T+E+C+A", "     [cycle and check]"),
+       "The trend-cycle T.C contains the trend T and the cycle C: separate them, then rebuild X.",
+       if (mult) "C = (T.C) / T,     X = T . E . C . A" else "C = (T.C) - T,     X = T + E + C + A")
+  cat("  EXAMPLE    : ", L$year[i0], " ", sn[L$season[i0]], ":  C = ", full_digits(tc[i0]), " ", op, " ",
+      full_digits(tr[i0]), " = ", full_digits(cyc[i0]), "\n", sep = "")
+  cat("               ", if (mult) "T.E.C.A" else "T+E+C+A", " = ", full_digits(tr[i0]), if (mult) " * " else " + ",
+      full_digits(idx[L$season[i0]]), if (mult) " * " else " + ", full_digits(cyc[i0]), if (mult) " * " else " + ",
+      full_digits(ac[i0]), " = ", full_digits(rebuilt[i0]), "   (X = ", full_digits(v[i0]), ")\n", sep = "")
+  cat("  >>> ANSWER  C =\n"); show_table(as_table(cyc, L))
+  ok <- !is.na(rebuilt)
+  cat("  CHECK      : ", if (mult) "T.E.C.A" else "T+E+C+A", " gives back X in the ", sum(ok),
+      " periods where C and A exist (largest difference ", full_digits(max(abs(rebuilt[ok] - v[ok]))), ").\n", sep = "")
+  
+  # STEP 10
+  if (!is.null(res$forecast)) {
+    f <- res$forecast
+    step(10, paste0("X_t = (a + b*t) ", if (mult) "*" else "+", " E'     [prediction]"),
+         paste0("Predict the next periods: trend of the future period ", if (mult) "x" else "+", " corrected seasonal index."),
+         paste0("X_t = (a + b * t) ", if (mult) "*" else "+", " I'"))
+    f1 <- f[1, ]
+    cat("  EXAMPLE    : ", f1$year, " ", f1$season, " (t = ", f1$t, "):  (", full_digits(res$a), signed_full_t(res$b),
+        " * ", f1$t, ") ", if (mult) "*" else "+", " ", full_digits(f1$seasonal_index), " = ",
+        full_digits(f1$trend), if (mult) " * " else " + ", full_digits(f1$seasonal_index), " = ", full_digits(f1$prediction), "\n", sep = "")
+    cat("  >>> ANSWER  X_t (prediction) =\n"); print(f, row.names = FALSE)
+  }
+  
+  # ---------------------------------------------------------------- SUMMARY
+  cat("\n", strrep("#", 72), "\n  FINAL SUMMARY OF ALL THE VALUES  (in the order they were calculated)\n",
+      strrep("#", 72), "\n", sep = "")
+  cat("\n  A) PER SEASON  (steps 3 and 4)\n")
+  sm <- cbind(uncorrected = vapply(raw * unit, full_digits, character(1)),
+              corrected = vapply(idx * unit, full_digits, character(1)),
+              meaning = vapply(seq_len(p), function(k) {
+                d <- if (mult) idx[k] * 100 - 100 else idx[k]
+                paste0(full_digits(abs(d)), if (mult) " % " else " ", if (d >= 0) "above" else "below", " the average")
+              }, character(1)))
+  rownames(sm) <- sn
+  colnames(sm)[1:2] <- paste0(colnames(sm)[1:2], if (mult) " (%)" else "")
+  print(sm, quote = FALSE, right = TRUE)
+  cat("  sum of the uncorrected = ", full_digits(sum(raw) * unit), "   sum of the corrected = ",
+      full_digits(sum(idx) * unit), "\n", sep = "")
+  
+  cat("\n  B) TREND LINE  (step 7)\n")
+  cat("     X = a + b * t  =  ", full_digits(res$a), signed_full_t(res$b), " * t\n", sep = "")
+  kv_t <- function(k, val, note) cat(sprintf("     %-4s = %-22s %s\n", k, full_digits(val), note))
+  kv_t("a", res$a, "INTERCEPT of the trend line (its value at t = 0)")
+  kv_t("b", res$b, paste0("slope: the trend ", if (res$b > 0) "grows" else "falls", " by this much each period"))
+  kv_t("r", res$r, "correlation of t and the deseasonalised series")
+  kv_t("R^2", res$r^2, "share of the deseasonalised series explained by the line")
+  
+  cat("\n  C) PER PERIOD, in the order of the steps  ('-' = not available: the moving average is lost)\n")
+  fmt <- function(z) ifelse(is.na(z), "-", vapply(z, full_digits, character(1)))
+  lab <- paste(L$year, sn[L$season])
+  Ev <- unname(idx[L$season])
+  blk1 <- cbind(X = fmt(v), `TC (1)` = fmt(tc), `E.A (2)` = fmt(ea), `E (4)` = fmt(Ev))
+  blk2 <- cbind(`A (5)` = fmt(ac), `X/E (6)` = fmt(des), `T (8)` = fmt(tr), `C (9)` = fmt(cyc))
+  rownames(blk1) <- rownames(blk2) <- lab
+  cat("\n     Original series and steps 1 to 4:\n"); print(blk1, quote = FALSE, right = TRUE)
+  cat("\n     Steps 5 to 9:\n"); print(blk2, quote = FALSE, right = TRUE)
+  cat("\n     Check ", if (mult) "T * E * C * A" else "T + E + C + A", " = X:\n", sep = "")
+  chk <- cbind(rebuilt = fmt(rebuilt), X = fmt(v)); rownames(chk) <- lab
+  print(chk, quote = FALSE, right = TRUE)
+  if (!is.null(res$forecast)) {
+    cat("\n  D) PREDICTION  (step 10)\n")
+    f <- res$forecast
+    pm <- cbind(t = f$t, trend = fmt(f$trend), index = fmt(f$seasonal_index), prediction = fmt(f$prediction))
+    rownames(pm) <- paste(f$year, f$season)
+    print(pm, quote = FALSE, right = TRUE)
+  }
+  cat("\n", strrep("=", 72), "\n", sep = "")
+  final_box(paste0("FINAL ANSWER (", model, "):  ", nm), c(
+    paste0("STEP 4  Corrected seasonal indices E':"), box_seasons(sn, idx, mult),
+    "",
+    "STEP 7/8  Trend line (regression of the deseasonalised series):",
+    box_trend(res$a, res$b, res$r^2, "T", "t"),
+    box_forecast(res$forecast)))
+  invisible(res)
+}
+
+# -----------------------------------------------------------------------------
+# seasonal_indices(ea, period = 4, model = "multiplicative", season_names = NULL)
+# -----------------------------------------------------------------------------
+# WHAT IT DOES : CASE: "Calculate the seasonal variation indices and the corrected
+#                seasonal indices of the following table E.A (= X / T.C)" and
+#                "interpret the results". Use it when the exercise GIVES you the
+#                table E.A (not the original series). It does steps 3 and 4 of
+#                the slides: the mean of each season (uncorrected indices, in %),
+#                their sum, the correction to 400 % and the interpretation.
+#                (If you have the series X itself, use time_series_steps().)
+# HOW TO TYPE THE TABLE (the easiest way): copy the numbers of the table ROW BY
+#                ROW, in quotes, and write "-" where the table has a dash. No
+#                matrix, no NA, no byrow:
+#                    seasonal_indices("- - 1.0778 0.9337
+#                                      1.1079 0.8764 1.1025 0.9246
+#                                      1.0906 0.8743 1.0932 0.9337
+#                                      1.1069 0.8932 1.0703 0.9573
+#                                      1.0559 0.8829 - -")
+#                You can also give a normal vector c(NA, NA, 1.0778, ...) or a matrix.
+# PARAMETERS   :
+#   ea           : the table E.A: a text with the numbers row by row (see above),
+#                  or a vector (row by row, NA or "-" for the dashes), or a matrix.
+#   period       : seasons per cycle = columns of the table. Default 4 (quarterly);
+#                  monthly = 12, four-month = 3 (ignored if ea is a matrix).
+#   model        : "multiplicative" (default, indices in %, they must add up to
+#                  period x 100) or "additive" (E+A table, they must add up to 0).
+#   season_names : (optional) names of the seasons, e.g. c("Spring","Summer",
+#                  "Autumn","Winter"). Default Q1..Q4 (or the column names).
+# RETURNS      : Invisibly, a list with `uncorrected` and `corrected` indices.
+# EXAMPLE      :
+#   seasonal_indices("- - 1.0778 0.9337
+#                     1.1079 0.8764 1.1025 0.9246
+#                     1.0906 0.8743 1.0932 0.9337
+#                     1.1069 0.8932 1.0703 0.9573
+#                     1.0559 0.8829 - -",
+#                    season_names = c("Spring","Summer","Autumn","Winter"))
+# -----------------------------------------------------------------------------
+seasonal_indices <- function(ea, period = 4, model = "multiplicative", season_names = NULL) {
+  model <- match.arg(model, c("multiplicative", "additive"))
+  mult <- model == "multiplicative"
+  if (is.matrix(ea) || is.data.frame(ea)) {
+    m <- as.matrix(ea)
+  } else {
+    if (is.character(ea)) {
+      txt <- paste(ea, collapse = " ")
+      txt <- iconv(txt, "UTF-8", "ASCII", sub = "-")              # long dashes (copied from a PDF) -> "-"
+      txt <- gsub(",(\\s|$)", " ", txt)                         # "1.0778, 0.9" -> separator
+      txt <- gsub("(?<=\\d),(?=\\d)", ".", txt, perl = TRUE)      # 1,0778 -> 1.0778
+      tok <- strsplit(trimws(txt), "[[:space:];]+")[[1]]
+      tok[grepl("^-+$", tok) | tok %in% c("NA", "na", "x", "X", "")] <- NA   # a dash = missing value
+      v <- suppressWarnings(as.numeric(tok))
+      if (any(is.na(v) & !is.na(tok))) stop("I could not read these values as numbers: ", paste(tok[is.na(v) & !is.na(tok)], collapse = ", "))
+    } else v <- as.numeric(ea)
+    if (length(v) %% period != 0)
+      stop("The table has ", length(v), " values, which does not fill whole rows of ", period,
+           " columns. Check the values or the `period` (columns of the table).")
+    m <- matrix(v, ncol = period, byrow = TRUE)
+  }
+  p <- ncol(m)
+  if (is.null(season_names)) season_names <- if (!is.null(colnames(m))) colnames(m) else default_season_names(p)
+  if (length(season_names) != p) stop("`season_names` must have ", p, " names.")
+  colnames(m) <- season_names
+  if (is.null(rownames(m))) rownames(m) <- paste0("year ", seq_len(nrow(m)))
+  unit <- if (mult) 100 else 1
+  old_width <- options(width = max(getOption("width"), 150)); on.exit(options(old_width), add = TRUE)
+  
+  raw <- colMeans(m, na.rm = TRUE)
+  idx <- if (mult) raw * p / sum(raw) else raw - mean(raw)
+  target <- if (mult) p * 100 else 0
+  tick <- function(z) paste(vapply(z, full_digits, character(1)), collapse = " + ")
+  
+  report_title(paste0("SEASONAL INDICES FROM THE TABLE ", if (mult) "E.A" else "E+A", "  (", model, ")"))
+  cat("  The table E.A  (X / T.C):\n"); show_table(m)
+  
+  cat("\n", strrep("=", 72), "\n E (uncorrected) = MEAN of ", if (mult) "E.A" else "E+A",
+      " in each season     [seasonal variation indices]\n", strrep("=", 72), "\n", sep = "")
+  cat("  WHAT WE DO : Average each season over the years: this eliminates the random component A.\n")
+  cat("  FORMULA    : I_season = mean of the values of that season\n")
+  for (k in seq_len(p)) {
+    v <- m[!is.na(m[, k]), k]
+    cat("  ", sprintf("%-10s", season_names[k]), " = (", tick(v), ") / ", length(v), " = ", full_digits(raw[k]),
+        if (mult) paste0("   =>  ", full_digits(raw[k] * 100), " %") else "", "\n", sep = "")
+  }
+  cat("  >>> ANSWER  E (uncorrected) =\n")
+  for (k in seq_len(p)) cat(sprintf("        %-10s %s%s\n", season_names[k], full_digits(raw[k]),
+                                    if (mult) paste0("   (", full_digits(raw[k] * 100), " %)") else ""))
+  cat("  Sum of the indices: ", full_digits(sum(raw) * unit), if (mult) " %" else "", "   (they should add up to ",
+      full_digits(target), if (mult) " %" else "", ")\n", sep = "")
+  if (abs(sum(raw) * unit - target) < 1e-9) {
+    cat("  -> They already add up exactly: the correction does not change them.\n")
+  } else cat("  -> They do NOT add up exactly, so they must be CORRECTED (normalised).\n")
+  
+  cat("\n", strrep("=", 72), "\n E' = ", if (mult) paste0(p * 100, " / (sum of E in %) * E") else "E - mean(E)",
+      "     [corrected / normalised indices]\n", strrep("=", 72), "\n", sep = "")
+  if (mult) {
+    cat("  FORMULA    : I' = ", p * 100, " / (sum of the indices in %) * I\n", sep = "")
+    cat("  CORRECTION FACTOR : ", p * 100, " / ", full_digits(sum(raw) * 100), " = ",
+        full_digits(p * 100 / (sum(raw) * 100)), "\n", sep = "")
+    for (k in seq_len(p)) cat("  ", sprintf("%-10s", season_names[k]), " = ", full_digits(p * 100 / (sum(raw) * 100)), " * ",
+                              full_digits(raw[k] * 100), " = ", full_digits(idx[k] * 100), " %\n", sep = "")
+  } else {
+    cat("  FORMULA    : I' = I - mean(I)      mean(I) = ", full_digits(mean(raw)), "\n", sep = "")
+    for (k in seq_len(p)) cat("  ", sprintf("%-10s", season_names[k]), " = ", full_digits(raw[k]), " - (", full_digits(mean(raw)), ") = ",
+                              full_digits(idx[k]), "\n", sep = "")
+  }
+  cat("  >>> ANSWER  E' (corrected seasonal indices) =\n")
+  for (k in seq_len(p)) cat(sprintf("        %-10s %s%s\n", season_names[k], full_digits(idx[k]),
+                                    if (mult) paste0("   (", full_digits(idx[k] * 100), " %)") else ""))
+  cat("  Sum of the corrected indices: ", full_digits(sum(idx) * unit), if (mult) " %" else "", "\n", sep = "")
+  cat("  NOTE: if the table E.A you typed is rounded (e.g. 4 decimals), the 3rd-4th decimal of these indices can\n",
+      "  differ a little from the exercise solution, which was computed with the unrounded table.\n", sep = "")
+  cat("\n  INTERPRETATION (what each season means compared with the annual average):\n")
+  for (k in seq_len(p)) {
+    if (mult) {
+      d <- idx[k] * 100 - 100
+      cat(sprintf("     %-10s %s %% %s than the annual average\n", season_names[k], full_digits(abs(d)), if (d >= 0) "HIGHER" else "LOWER"))
+    } else cat(sprintf("     %-10s %s %s the annual average\n", season_names[k], full_digits(abs(idx[k])), if (idx[k] >= 0) "ABOVE" else "BELOW"))
+  }
+  cat("\n", strrep("=", 72), "\n", sep = "")
+  final_box(paste0("SEASONAL INDICES (", model, ")"), c(
+    "UNCORRECTED (mean of each season):", box_seasons(season_names, raw, mult, "I"),
+    paste0("  sum = ", full_digits(sum(raw) * unit), if (mult) " %" else ""),
+    "",
+    "CORRECTED (normalised):", box_seasons(season_names, idx, mult, "I'"),
+    paste0("  sum = ", full_digits(sum(idx) * unit), if (mult) " %" else "")))
+  invisible(list(uncorrected = raw, corrected = idx))
+}
+
+# -----------------------------------------------------------------------------
+# autocorrelation(x, lag = NULL, threshold = 0.95, plot = TRUE, max_lag = NULL)
+# -----------------------------------------------------------------------------
+# WHAT IT DOES : CASE: "Determine if the time series has a cycle of period T"
+#                or "find the cycle of the series". Correlates the series X(t)
+#                with the same series shifted `lag` periods, X(t+lag). If
+#                r is close to 1, the series repeats itself every `lag`
+#                periods: there is a cycle of that period.
+#                - With `lag`: shows the table of pairs, r, and the verdict.
+#                - Without `lag`: tries the lags 1, 2, ..., max_lag, keeps the one with
+#                  the HIGHEST r and shows it in the same format as above (after a
+#                  small table with the r of every lag tested).
+#                - With several lags, e.g. lag = 2:5: tries only those and keeps the highest.
+# FORMULA (for reference — matches the slides' notation):
+#   r = correlation coefficient between (X_1..X_{N-lag}) and (X_{1+lag}..X_N)
+# PARAMETERS   :
+#   x         : the series, in time order.
+#   lag       : (optional) the period to test, e.g. 3. Leave empty to scan.
+#   threshold : r from which a cycle is declared (default 0.95, "r close to 1").
+#   plot      : FALSE to skip the plot.
+#   max_lag   : (optional) largest lag to try when `lag` is empty. Default: N / 2
+#               (rounded down), so every r uses at least half of the data.
+# RETURNS      : Invisibly, r (one lag) or a data.frame lag / pairs / r (scan).
+# WHAT IS THE LAG? : how many positions the series is shifted before comparing
+#                it with itself = the period of the cycle you want to test.
+#                lag = 3  ->  pairs (X1,X4) (X2,X5) (X3,X6) ...
+# WHICH LAG DO I USE? (look at what the exercise says):
+#   "cycle of period 3" / "frequency 3" / "shifted 3 periods" ....... lag = 3
+#   "r between X(t) and X(t+T)" ...................................... lag = T
+#   quarterly data, "is there a yearly pattern?" ..................... lag = 4
+#   monthly data,   "is there a yearly pattern?" ..................... lag = 12
+#   four-month data (3 per year) ..................................... lag = 3
+#   semester data (2 per year) ....................................... lag = 2
+#   daily data,  "is there a weekly pattern?" ........................ lag = 7
+#   hourly data, "is there a daily pattern?" ......................... lag = 24
+#   "which is the period of the cycle?" (not given) .................. no lag
+#                                  (or try several lags and keep the r nearest 1)
+#   "is it 3 or 4?" .................. run lag = 3 and lag = 4, the higher r wins
+# EXAMPLES     :
+#   x <- c(1.2, 1.4, 2.0, 1.23, 1.37, 2.07, 1.25, 1.47, 2.09)
+#   autocorrelation(x, lag = 3)     # r = 0.9936708...  -> cycle of period 3
+#   autocorrelation(x, lag = 2)     # r far from 1      -> NO cycle of period 2
+#   autocorrelation(x)              # tries the lags 1..N/2 and keeps the HIGHEST r (here lag 3)
+#   autocorrelation(x, lag = 2:4)   # tries only the lags 2, 3 and 4 and keeps the highest r
+#   autocorrelation(x, max_lag = 6) # tries the lags 1..6 (default max is N/2 = 4 here)
+#   # What you see with autocorrelation(x) (a table of the lags tested, then the usual output):
+#   #   lag pairs                  r         best
+#   #     1     8 -0.381812081358112
+#   #     2     7 -0.541019836413653
+#   #     3     6   0.99367081338781 <- highest r
+#   #     4     5 -0.320450134225392
+#   #   -> r close to 1 for lag 3: the series HAS A CYCLE of period 3
+#   # 5 years of quarterly data (20 values), is there a yearly pattern?
+#   autocorrelation(sales, lag = 4)
+#   # 6 years of monthly data (72 values), is there a yearly pattern?
+#   autocorrelation(sales, lag = 12)
+# HOW TO READ r: close to 1 (>= 0.95 by default) -> cycle of that period.
+#                far from 1 (e.g. 0.3)           -> no cycle of that period.
+# -----------------------------------------------------------------------------
+autocorrelation <- function(x, lag = NULL, threshold = 0.95, plot = TRUE, max_lag = NULL) {
+  nm <- variable_label(deparse(substitute(x)), "X")
+  x <- as.numeric(x); n <- length(x)
+  r_at <- function(l) cor(x[1:(n - l)], x[(1 + l):n])
+  scan_tab <- NULL
+  if (is.null(lag) || length(lag) > 1) {
+    # No lag (or several lags) given: try them all and keep the one with the HIGHEST r.
+    # Then show that lag in EXACTLY the same format as a single given lag.
+    if (is.null(lag)) {
+      if (is.null(max_lag)) max_lag <- n %/% 2            # at least half of the data in every pair set
+      lags <- 1:min(max_lag, n - 3)
+    } else lags <- lag
+    if (n < 6 && is.null(lag)) stop("At least 6 data are needed to scan the lags; give a `lag` instead.")
+    lags <- lags[lags >= 1 & n - lags >= 3]
+    if (length(lags) == 0) stop("No valid lag to test (each lag needs at least 3 pairs).")
+    rs <- vapply(lags, r_at, numeric(1))
+    scan_tab <- data.frame(lag = lags, pairs = n - lags, r = rs)
+    lag <- lags[which.max(rs)]
+    report_section(paste0("LAGS TESTED (the highest r is kept): ", paste(lags, collapse = ", ")))
+    print(data.frame(lag = lags, pairs = n - lags, r = vapply(rs, full_digits, character(1)),
+                     best = ifelse(lags == lag, "<- highest r", "")), row.names = FALSE, right = TRUE)
+  }
+  if (lag < 1 || n - lag < 3) stop("The lag must be between 1 and ", n - 3, " (at least 3 pairs are needed).")
+  r <- r_at(lag)
+  report_title(paste0("AUTOCORRELATION WITH LAG ", lag, ":  ", nm))
+  report_section(paste0("Series X(t) and the same series shifted ", lag, " periods X(t+", lag, ")"))
+  # Same table as the slides: columns t = 1 .. N + lag, the shifted series starts `lag` columns later.
+  pair_tab <- rbind(c(x, rep(NA, lag)), c(rep(NA, lag), x))
+  rownames(pair_tab) <- c("X(t)", paste0("X(t+", lag, ")"))
+  colnames(pair_tab) <- paste0("t=", seq_len(n + lag))
+  show_table(pair_tab)
+  report_line("Number of pairs used", n - lag)
+  report_line(paste0("r = correlation of X(t) and X(t+", lag, ")"), r)
+  cat("  ->", if (r >= threshold) paste0("r is close to 1: the series HAS A CYCLE of period ", lag)
+      else paste0("r is not close to 1: there is NO clear cycle of period ", lag), "\n")
+  final_box(paste0("AUTOCORRELATION, LAG ", lag), c(
+    box_line(paste0("r (X(t) and X(t+", lag, "))"), r),
+    paste0("Pairs used = ", n - lag),
+    if (r >= threshold) paste0("CONCLUSION: r is close to 1 -> there IS a cycle of period ", lag)
+    else paste0("CONCLUSION: r is not close to 1 -> there is NO cycle of period ", lag)))
+  if (plot) {
+    plot(x[1:(n - lag)], x[(1 + lag):n], pch = 19, col = "steelblue",
+         xlab = "X(t)", ylab = paste0("X(t+", lag, ")"), main = paste0("Autocorrelation, lag ", lag, ",  r = ", signif(r, 6)))
+    abline(lm(x[(1 + lag):n] ~ x[1:(n - lag)]), col = "firebrick", lwd = 2)
+  }
+  invisible(if (is.null(scan_tab)) r else scan_tab)
+}
+
 
 # =============================================================================
-#  compare_fits(x, y, n = NULL, predict_at = NULL, plot = TRUE)
+# INDEX NUMBERS
 # =============================================================================
-# FOR WHICH CASE : "Fit the linear, quadratic, hyperbolic and exponential models
-#                  and say which one is best / most suitable for prediction."
-#                  ONE call fits all 4 types of the "Types of Fitting" slide,
-#                  prints each one (equation, SSE, MSE, R^2), ranks them, says
-#                  which is the best and draws all 4 curves on one plot.
-# MODELS       : Linear      y = a + b*x
-#                Quadratic   y = a*x^2 + b*x + c
-#                Hyperbolic  y = 1/(a + b*x)     (fitted on 1/y, needs y != 0)
-#                Exponential y = a*e^(b*x)       (fitted on ln y, needs y > 0)
-#                A model that cannot be fitted (e.g. ln of y <= 0) is skipped
-#                and the reason is printed.
+
+# -----------------------------------------------------------------------------
+# simple_index(value, base_value, percent = FALSE)
+# -----------------------------------------------------------------------------
+# WHAT IT DOES : CASE: "Calculate the simple (elementary) index of period t
+#                with base period t0" / "percentage of variation of X between
+#                two periods". Gives the index and the percentage of variation.
+# FORMULA (for reference — matches the slides' notation):
+#   X_{t/t0} = X_t / X_t0           variation (%) = (X_{t/t0} - 1) * 100
 # PARAMETERS   :
-#   x, y        : the data (vectors of the same length).
-#   n           : (optional) frequency of each pair.
-#   predict_at  : (optional) x value(s) where you want the prediction of every
-#                 model, e.g. predict_at = c(6, 10).
-#   plot        : TRUE draws the 4 curves.
-# CRITERION    : highest R^2 = lowest MSE (computed on the ORIGINAL y), the
-#                course criterion. R^2 = 1 - MSE / Var(y).
-# RETURNS      : (invisibly) a list with the table, each fit and the best one.
-# EXAMPLE      : compare_fits(c(1,2,3,4,5), c(1,1,2,4,8), predict_at = c(6,10))
-# =============================================================================
-compare_fits <- function(x, y, n = NULL, predict_at = NULL, plot = TRUE) {
-  if (length(x) != length(y)) stop("x and y must have the same length.")
-  w <- if (is.null(n)) rep(1, length(x)) else n
-  vy <- variance(y, n)
-  models <- list()
-  add <- function(name, eq, f, params) {
-    fit <- f(x)
-    sse <- sse_fit(y, fit, n)
-    models[[name]] <<- list(name = name, equation = eq, f = f, params = params,
-                            sse = sse, mse = sse / sum(w), r2 = 1 - (sse / sum(w)) / vy)
-  }
-  skipped <- character(0)
+#   value      : value of the variable in the period t (the one you compare).
+#   base_value : value in the base period t0.
+# RETURNS      : Invisibly, the index (as a ratio; 1.2033 = 120.33 %).
+# EXAMPLE      :
+#   simple_index(148, 123)     # 1.2033 -> increase of 20.33 % with respect to the base
+# -----------------------------------------------------------------------------
+simple_index <- function(value, base_value) {
+  idx <- value / base_value
+  report_title("SIMPLE INDEX NUMBER")
+  report_line("Value in the period t", value)
+  report_line("Value in the base period t0", base_value)
+  report_line("Index X(t/t0) = value / base value", idx)
+  report_line("Index in percentage", idx * 100)
+  report_line("Variation with respect to the base period (%)", (idx - 1) * 100)
+  cat("  ->", if (idx > 1) paste0("an INCREASE of ", full_digits((idx - 1) * 100), " % with the base period")
+      else if (idx < 1) paste0("a DECREASE of ", full_digits((1 - idx) * 100), " % with the base period")
+      else "no change", "\n")
+  final_box("SIMPLE INDEX", c(
+    paste0("X(t/t0) = ", full_digits(value), " / ", full_digits(base_value), " = ", full_digits(idx)),
+    box_line("Index in percentage (%)", idx * 100),
+    box_line("Variation (%)", (idx - 1) * 100),
+    if (idx > 1) paste0("-> INCREASE of ", full_digits((idx - 1) * 100), " % with respect to the base")
+    else if (idx < 1) paste0("-> DECREASE of ", full_digits((1 - idx) * 100), " % with respect to the base")
+    else "-> no change"))
+  invisible(idx)
+}
+
+# -----------------------------------------------------------------------------
+# index_numbers(values, base = 1, labels = NULL, name = NULL, plot = TRUE)
+# -----------------------------------------------------------------------------
+# WHAT IT DOES : CASE: "Calculate all the elementary indices taking year X as
+#                the base period" or "express the series as an index". Gives
+#                the index of EVERY period with respect to the base, as a
+#                ratio and as a percentage, plus the percentage of variation.
+# FORMULA (for reference — matches the slides' notation):
+#   C_{t/base} = X_t / X_base
+# PARAMETERS   :
+#   values : the value of the variable in each period.
+#   base   : the base period. Give its LABEL (e.g. 2000) if you use `labels`,
+#            otherwise its POSITION (1 = the first period). Default: the first.
+#   labels : (optional) names of the periods, e.g. 2000:2003.
+#   name   : (optional) name of the variable.
+#   plot   : FALSE to skip the plot.
+# RETURNS      : Invisibly, a data.frame with period, value, index, percentage
+#                and variation.
+# EXAMPLE      :
+#   index_numbers(c(1254, 1345, 1408, 1451), base = 2000, labels = 2000:2003)
+#   # 1, 1.0726, 1.1228, 1.1571
+# -----------------------------------------------------------------------------
+index_numbers <- function(values, base = 1, labels = NULL, name = NULL, plot = TRUE) {
+  nm <- if (is.null(name)) variable_label(deparse(substitute(values)), "X") else name
+  n <- length(values)
+  if (is.null(labels)) labels <- seq_len(n)
+  if (length(labels) != n) stop("`labels` must have one entry per value.")
+  pos <- if (!is.null(labels) && base %in% labels) which(labels == base)[1] else base
+  if (is.na(pos) || pos < 1 || pos > n) stop("The base period is not in the data.")
+  idx <- values / values[pos]
+  b <- labels[pos]
+  report_title(paste0("INDEX NUMBERS:  ", nm, "  (base period = ", b, ")"))
   
-  # Linear
-  b <- covariance(x, y, n) / variance(x, n)
-  a <- arithmetic_mean(y, n) - b * arithmetic_mean(x, n)
-  add("Linear", paste0("y = ", full_digits(a), signed_full(b), " * x"),
-      function(t) a + b * t, c(a = a, b = b))
+  report_section("GENERAL DATA")
+  report_line("Variable", nm)
+  report_line("Base period (t0)", b)
+  report_line(paste0("Value in the base period, X(", b, ")"), values[pos])
+  report_line("Number of periods", n)
+  cat("\n  FORMULA:  I(t/", b, ") = X(t) / X(", b, ")     variation (%) = (I - 1) * 100\n", sep = "")
   
-  # Quadratic (weighted least squares)
-  if (length(unique(x)) >= 3) {
-    cf <- coef(lm(y ~ I(x^2) + x, weights = w))
-    qa <- unname(cf[2 + 0]); qa <- unname(cf["I(x^2)"]); qb <- unname(cf["x"]); qc <- unname(cf["(Intercept)"])
-    add("Quadratic", paste0("y = ", full_digits(qa), " * x^2", signed_full(qb), " * x", signed_full(qc)),
-        function(t) qa * t^2 + qb * t + qc, c(a = qa, b = qb, c = qc))
-  } else skipped <- c(skipped, "Quadratic: needs at least 3 different x values")
-  
-  # Hyperbolic
-  if (all(y != 0)) {
-    h <- linearised_stats(x, 1 / y, n)
-    add("Hyperbolic", paste0("y = 1 / (", full_digits(h$A), signed_full(h$B), " * x)"),
-        function(t) 1 / (h$A + h$B * t), c(a = h$A, b = h$B))
-  } else skipped <- c(skipped, "Hyperbolic: some y = 0 (1/y undefined)")
-  
-  # Exponential
-  if (all(y > 0)) {
-    e <- linearised_stats(x, log(y), n)
-    ea <- exp(e$A); eb <- e$B
-    add("Exponential", paste0("y = ", full_digits(ea), " * e^(", full_digits(eb), " * x)"),
-        function(t) ea * exp(eb * t), c(a = ea, b = eb))
-  } else skipped <- c(skipped, "Exponential: some y <= 0 (ln y undefined)")
-  
-  tab <- data.frame(model = names(models),
-                    SSE = sapply(models, `[[`, "sse"), MSE = sapply(models, `[[`, "mse"),
-                    R2 = sapply(models, `[[`, "r2"), row.names = NULL)
-  tab <- tab[order(-tab$R2), ]
-  best <- tab$model[1]
-  
-  report_title("COMPARISON OF THE 4 FITS (Linear, Quadratic, Hyperbolic, Exponential)")
-  cat("Variance of y (Vy) =", full_digits(vy), "\n")
-  cat("R^2 = 1 - MSE / Vy   (measured on the ORIGINAL y)\n\n")
-  for (m in models) {
-    cat("---", m$name, "---\n")
-    cat("  ", m$equation, "\n")
-    for (i in seq_along(m$params)) cat("   ", names(m$params)[i], "=", full_digits(m$params[i]), "\n")
-    cat("   SSE =", full_digits(m$sse), "\n   MSE =", full_digits(m$mse),
-        "\n   R^2 =", full_digits(m$r2), "\n\n")
-  }
-  for (s in skipped) cat("SKIPPED ->", s, "\n")
-  cat("\nRANKING (best first):\n")
-  for (i in seq_len(nrow(tab)))
-    cat(sprintf("  %d. %-12s R^2 = %s   MSE = %s\n", i, tab$model[i],
-                full_digits(tab$R2[i]), full_digits(tab$MSE[i])))
-  cat("\nBEST MODEL:", best, " (highest R^2 and lowest MSE)\n")
-  if (best == "Quadratic")
-    cat("Note: the quadratic always has R^2 >= the linear one (it contains it) and can bend wrongly outside the data; check the plot before using it far from the data.\n")
-  
-  if (!is.null(predict_at)) {
-    cat("\nPREDICTIONS:\n")
-    pm <- sapply(models, function(m) m$f(predict_at))
-    pm <- matrix(pm, nrow = length(predict_at), dimnames = list(paste0("x = ", predict_at), names(models)))
-    for (i in seq_along(predict_at)) {
-      cat("  x =", predict_at[i], "\n")
-      for (nm in colnames(pm)) cat("     ", sprintf("%-12s", nm), full_digits(pm[i, nm]), "\n")
-    }
+  report_section(paste0("STEP BY STEP: one index per period, base ", b))
+  for (i in seq_len(n)) {
+    cat(sprintf("\n  I(%s/%s) = X(%s) / X(%s) = %s / %s\n", labels[i], b, labels[i], b,
+                full_digits(values[i]), full_digits(values[pos])))
+    cat(sprintf("           = %s   (= %s %%)\n", full_digits(idx[i]), full_digits(idx[i] * 100)))
+    if (i == pos) cat("           (base period: its index is always 1 = 100 %)\n")
+    else cat(sprintf("           variation = (%s - 1) * 100 = %s %%\n", full_digits(idx[i]), full_digits((idx[i] - 1) * 100)))
   }
   
-  bm <- models[[best]]
-  final_box("FINAL RESULT: BEST OF THE 4 FITS", c(
-    paste0("BEST MODEL: ", best, "  (highest R^2 = lowest MSE)"),
-    bm$equation,
-    "",
-    "RANKING (best first):",
-    vapply(seq_len(nrow(tab)), function(i) paste0("  ", i, ". ", sprintf("%-12s", tab$model[i]), " R^2 = ", full_digits(tab$R2[i]), "   MSE = ", full_digits(tab$MSE[i])), character(1)),
-    if (!is.null(predict_at)) c("", paste0("PREDICTIONS with the best model (", best, "):"),
-                                vapply(predict_at, function(v) box_line(paste0("  x = ", full_digits(v)), bm$f(v)), character(1)))))
+  report_section("SUMMARY TABLE")
+  tab <- data.frame(period = labels, value = values, index = idx,
+                    percentage = idx * 100, variation_percent = (idx - 1) * 100)
+  print(tab, row.names = FALSE)
+  
+  ans <- character(0)
+  for (i in seq_len(n)) {
+    d <- (idx[i] - 1) * 100
+    what <- if (i == pos) "base period"
+    else if (d > 0) paste0(full_digits(d), " % MORE than in ", b)
+    else if (d < 0) paste0(full_digits(-d), " % LESS than in ", b)
+    else paste0("same as in ", b)
+    ans <- c(ans, sprintf("I(%s/%s) = %s = %s %%  -> %s", labels[i], b, full_digits(idx[i]), full_digits(idx[i] * 100), what))
+  }
+  cat("\n  >>> ANSWER: ALL THE ELEMENTARY INDICES WITH BASE ", b, "\n", sep = "")
+  answer_box(ans)
   if (plot) {
-    xr <- range(c(x, predict_at)); g <- seq(xr[1], xr[2], length.out = 300)
-    curves <- lapply(models, function(m) m$f(g))
-    yr <- range(c(y, unlist(curves)), finite = TRUE)
-    yr <- c(max(yr[1], min(y) - 2 * diff(range(y))), min(yr[2], max(y) + 2 * diff(range(y))))
-    cols <- c(Linear = "blue", Quadratic = "darkgreen", Hyperbolic = "orange", Exponential = "red")
-    plot(x, y, pch = 19, ylim = yr, xlim = xr, main = paste("Fits compared - best:", best))
-    for (nm in names(curves)) lines(g, curves[[nm]], col = cols[nm], lwd = if (nm == best) 3 else 1.5)
-    legend("topleft", legend = names(curves), col = cols[names(curves)], lwd = 2, bty = "n")
+    barplot(idx * 100, names.arg = labels, col = ifelse(seq_len(n) == pos, "firebrick", "steelblue"),
+            ylab = "index (%)", main = paste0("Index of ", nm, ", base ", labels[pos]))
+    abline(h = 100, lty = 2)
   }
-  invisible(list(table = tab, models = models, best = best))
+  invisible(tab)
+}
+
+# =============================================================================
+# 1. INDEX NUMBER PROPERTIES
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# invert_index(index, percent = FALSE)
+# -----------------------------------------------------------------------------
+# WHAT IT DOES : CASE: "I know I(b/a); find I(a/b)" (change the base to the
+#                other period). Property of inversion.
+# FORMULA (for reference — matches the slides' notation):
+#   X_{a/b} = 1 / X_{b/a}
+# PARAMETERS   :
+#   index   : the known index (1.35, or 135 if percent = TRUE).
+#   percent : TRUE if you type it as a percentage.
+# RETURNS      : The inverse index, in the same units you typed it.
+# EXAMPLE      :
+#   invert_index(1.35)             # 0.7407407...
+#   invert_index(135, percent = TRUE)   # 74.07407...
+# -----------------------------------------------------------------------------
+invert_index <- function(index, percent = FALSE) {
+  out <- if (percent) 100 * 100 / index else 1 / index
+  report_title("INVERSE INDEX  X(a/b) = 1 / X(b/a)")
+  report_line("Known index X(b/a)", index)
+  report_line("Inverse index X(a/b)", out)
+  final_box("INVERSE INDEX", c(
+    paste0("X(a/b) = 1 / X(b/a) = ", if (percent) "100 * 100 / " else "1 / ", full_digits(index)),
+    box_line(if (percent) "X(a/b) (%)" else "X(a/b)", out)))
+  invisible(out)
+}
+
+# -----------------------------------------------------------------------------
+# chain_index(..., percent = FALSE)
+# -----------------------------------------------------------------------------
+# WHAT IT DOES : CASE: "I know I(a/b) and I(b/c); find I(a/c)" (change of base
+#                / cyclic and modified cyclic properties). Multiplies the
+#                indices. Put them in the order a/b, b/c, c/d...
+#                To use an index in the other direction, apply invert_index()
+#                first.
+# FORMULA (for reference — matches the slides' notation):
+#   X_{a/b} * X_{b/c} * ... * X_{y/z} = X_{a/z}
+# PARAMETERS   :
+#   ...     : the indices to chain (ratios, or percentages if percent = TRUE).
+#   percent : TRUE if you type them as percentages (e.g. 1000 for 1000 %).
+# RETURNS      : The chained index, in the same units you typed.
+# EXAMPLE      :
+#   chain_index(1.2, 1.5)                          # 1.8
+#   chain_index(1000, 1/0.75*100, percent = TRUE)  # I(06/69) = 13.33 -> 1333.33 %
+# -----------------------------------------------------------------------------
+chain_index <- function(..., percent = FALSE) {
+  v <- c(...)
+  out <- if (percent) prod(v / 100) * 100 else prod(v)
+  report_title("CHAINED INDEX  X(a/b) * X(b/c) * ... = X(a/z)")
+  for (i in seq_along(v)) report_line(paste0("Index ", i), v[i])
+  report_line("Chained index X(a/z)", out)
+  final_box("CHAINED INDEX", c(
+    paste0("X(a/z) = ", paste(full_digits(v), collapse = if (percent) " % * " else " * "), if (percent) " %" else ""),
+    box_line(if (percent) "X(a/z) (%)" else "X(a/z)", out)))
+  invisible(out)
+}
+
+# -----------------------------------------------------------------------------
+# deflate(nominal, cpi, labels = NULL, percent = FALSE)
+# -----------------------------------------------------------------------------
+# WHAT IT DOES : CASE: "Calculate the REAL value (constant money) of a nominal
+#                amount", "convert to the money of the base year", "deflate
+#                the series with the CPI". Divides the nominal value by the
+#                price index I(t/t0): you get the equivalent amount in the
+#                money of the base period t0. Works for one amount or for a
+#                whole series.
+# FORMULA (for reference — matches the slides' notation):
+#   real value (in money of t0) = nominal value of t / CPI(t/t0)
+# PARAMETERS   :
+#   nominal : the nominal (current) value(s), in the money of period t.
+#   cpi     : the price index I(t/t0) of that period WITH RESPECT TO the base
+#             period t0 (one number, or one per value).
+#             Example: "the CPI of 1998 with respect to 1990 is 135 %"
+#             -> cpi = 1.35 (or 135 with percent = TRUE).
+#             To bring a value of the BASE year to the money of year t (the
+#             opposite direction) use cpi = invert_index(1.35).
+#   labels  : (optional) names of the periods (years).
+#   percent : TRUE if the CPI is typed as a percentage (135).
+# RETURNS      : Invisibly, the real value(s).
+# EXAMPLE      :
+#   deflate(1000, 1.35)                     # 740.74: 1000 of 1998 = 740.74 of 1990
+#   deflate(1000, 1/1.35)                   # 1350: 1000 of 1990 = 1350 of 1998
+#   deflate(c(100, 110, 120), c(100, 104, 109), labels = 2020:2022, percent = TRUE)
+# -----------------------------------------------------------------------------
+deflate <- function(nominal, cpi, labels = NULL, percent = FALSE) {
+  cpi_ratio <- if (percent) cpi / 100 else cpi
+  real <- nominal / cpi_ratio
+  report_title("DEFLATION: REAL VALUE = NOMINAL VALUE / CPI")
+  if (length(nominal) == 1 && length(cpi_ratio) == 1) {
+    report_line("Nominal value", nominal)
+    report_line("CPI (as a ratio, CPI = 1 means no change in prices)", cpi_ratio)
+    report_line("Real value (in money of the base period)", real)
+    cat("  ->", if (cpi_ratio > 1) "prices rose, so the real value is SMALLER than the nominal one"
+        else if (cpi_ratio < 1) "prices fell, so the real value is LARGER than the nominal one"
+        else "no inflation", "\n")
+  } else {
+    if (is.null(labels)) labels <- seq_along(real)
+    print(data.frame(period = labels, nominal = nominal, cpi = cpi_ratio, real = real), row.names = FALSE)
+  }
+  if (length(real) == 1) {
+    final_box("DEFLATION: REAL VALUE", c(
+      paste0("Real value = ", full_digits(nominal), " / ", full_digits(cpi_ratio)),
+      box_line("REAL VALUE (money of the base period)", real)))
+  } else {
+    lb <- if (is.null(labels)) seq_along(real) else labels
+    final_box("DEFLATION: REAL VALUES (money of the base period)",
+              vapply(seq_along(real), function(i) paste0("Real(", lb[i], ") = ", full_digits(nominal[i]), " / ", full_digits(cpi_ratio[i]), " = ", full_digits(real[i])), character(1)))
+  }
+  invisible(real)
+}
+
+# -----------------------------------------------------------------------------
+# real_change(nominal_change, cpi_change, percent = TRUE)
+# -----------------------------------------------------------------------------
+# WHAT IT DOES : CASE: "The salary (or price) grew X % and the CPI grew Y % in
+#                the same period: how much did it really change?". Gives the
+#                real value of 100 units and the real percentage of change
+#                (purchasing power).
+# FORMULA (for reference — matches the slides' notation):
+#   real value = (100 + nominal change) / CPI(t/t0)         CPI = 1 + CPI change
+# PARAMETERS   :
+#   nominal_change : growth of the salary / amount (50 means +50 %).
+#   cpi_change     : growth of the CPI in the same period (100 means it doubled).
+#   percent        : TRUE (default) if both are typed as percentages. FALSE if
+#                    you type them as ratios (0.5 = +50 %).
+# RETURNS      : Invisibly, the real change as a ratio (0.75 = -25 %).
+# EXAMPLE      :
+#   real_change(50, 100)     # salary +50 %, CPI doubled -> real 75 -> -25 %
+# -----------------------------------------------------------------------------
+real_change <- function(nominal_change, cpi_change, percent = TRUE) {
+  nom <- if (percent) nominal_change / 100 else nominal_change
+  cpi <- if (percent) cpi_change / 100 else cpi_change
+  ratio <- (1 + nom) / (1 + cpi)
+  report_title("REAL CHANGE (PURCHASING POWER)")
+  report_line("Nominal value of 100 units at the end of the period", 100 * (1 + nom))
+  report_line("CPI at the end with respect to the start", 1 + cpi)
+  report_line("Real value of that amount in money of the start (100 -> ?)", 100 * ratio)
+  report_line("Real change (%)", (ratio - 1) * 100)
+  cat("  ->", if (ratio < 1) paste0("the purchasing power DECREASED by ", full_digits((1 - ratio) * 100), " %")
+      else if (ratio > 1) paste0("the purchasing power INCREASED by ", full_digits((ratio - 1) * 100), " %")
+      else "the purchasing power did not change", "\n")
+  final_box("REAL CHANGE (PURCHASING POWER)", c(
+    box_line("Real change (%)", (ratio - 1) * 100),
+    if (ratio < 1) paste0("-> the purchasing power DECREASED by ", full_digits((1 - ratio) * 100), " %")
+    else if (ratio > 1) paste0("-> the purchasing power INCREASED by ", full_digits((ratio - 1) * 100), " %")
+    else "-> the purchasing power did not change"))
+  invisible(ratio)
+}
+
+# -----------------------------------------------------------------------------
+# real_salary(salary_pct = NULL, cpi_pct = NULL, years = NULL,
+#             salary = NULL, cpi = NULL, labels = NULL, base = 1)
+# -----------------------------------------------------------------------------
+# WHAT IT DOES : ONE CALL FOR THE WHOLE "salary vs CPI" EXERCISE: "the salary grew
+#                50 % and the CPI doubled: how much did it REALLY grow?", "what is
+#                the real salary of each year?", "did the purchasing power go up or
+#                down?". It gives the index of the salary, the index of the CPI, the
+#                real index, the real change in %, the real value in money of the
+#                base period, the average yearly change (if you give the years),
+#                the interpretation, and a final box with the answer.
+# THE EASIEST WAY (the exercise gives percentages):
+#   real_salary(salary_pct = 50, cpi_pct = 100)             # salary +50 %, CPI +100 % ("doubled")
+#   real_salary(salary_pct = 50, cpi_pct = 100, years = 10) # + the average yearly change
+# CPI "doubled" = +100 %, "tripled" = +200 %, "grew by 30 %" = +30, "fell by 10 %" = -10.
+# WITH A TABLE (the exercise gives the salary and the CPI of each year):
+#   real_salary(salary = c(1000, 1200, 1500), cpi = c(100, 110, 130), labels = 1970:1972)
+#   (cpi = the CPI of each year, any base: only its ratio to the base year matters)
+# PARAMETERS   :
+#   salary_pct : % change of the salary over the period (50 = grew 50 %, -10 = fell 10 %).
+#   cpi_pct    : % change of the CPI (prices) over the same period.
+#   years      : (optional) length of the period in years, for the average yearly change.
+#   salary     : (table mode) the salary of each period.
+#   cpi        : (table mode) the CPI of each period.
+#   labels     : (table mode, optional) the periods, e.g. 1970:1972.
+#   base       : (table mode) base period: its label (1970) if you use `labels`,
+#                otherwise its position. Default: the first one.
+# RETURNS      : Invisibly, a list (percentage mode: real_ratio, real_change_pct; table mode:
+#                a data.frame with the nominal and real values and indices).
+# EXAMPLES     :
+#   real_salary(salary_pct = 50, cpi_pct = 100)   # real change = -25 %: purchasing power DOWN
+#   real_salary(salary_pct = 80, cpi_pct = 40)    # real change = +28.57... %: UP
+#   real_salary(salary = c(1000, 1200, 1500), cpi = c(100, 110, 130), labels = 1970:1972)
+# -----------------------------------------------------------------------------
+real_salary <- function(salary_pct = NULL, cpi_pct = NULL, years = NULL,
+                        salary = NULL, cpi = NULL, labels = NULL, base = 1) {
+  if (!is.null(salary_pct) && !is.null(cpi_pct)) {
+    nom <- salary_pct / 100; inf <- cpi_pct / 100
+    ratio <- (1 + nom) / (1 + inf)
+    chg <- (ratio - 1) * 100
+    report_title("REAL SALARY: SALARY vs CPI (percentage changes)")
+    report_section("GENERAL DATA")
+    report_line("Change of the salary over the period (%)", salary_pct)
+    report_line("Change of the CPI (prices) over the period (%)", cpi_pct)
+    if (!is.null(years)) report_line("Length of the period (years)", years)
+    report_section("STEP BY STEP (taking 100 as the starting salary and the starting CPI)")
+    cat("  1. Index of the salary  = 1 + ", full_digits(salary_pct), " / 100 = ", full_digits(1 + nom),
+        "   (nominal salary: 100 -> ", full_digits(100 * (1 + nom)), ")\n", sep = "")
+    cat("  2. Index of the CPI     = 1 + ", full_digits(cpi_pct), " / 100 = ", full_digits(1 + inf),
+        "   (prices: 100 -> ", full_digits(100 * (1 + inf)), ")\n", sep = "")
+    cat("  3. Real index = salary index / CPI index = ", full_digits(1 + nom), " / ", full_digits(1 + inf),
+        " = ", full_digits(ratio), "   (= ", full_digits(ratio * 100), " %)\n", sep = "")
+    cat("  4. Real change (%) = (real index - 1) * 100 = (", full_digits(ratio), " - 1) * 100 = ", full_digits(chg), " %\n", sep = "")
+    cat("  5. Real value of the new salary in money of the start: 100 * ", full_digits(ratio), " = ", full_digits(100 * ratio), "\n", sep = "")
+    yr <- NULL
+    if (!is.null(years)) {
+      yr <- list(nominal = ((1 + nom)^(1 / years) - 1) * 100, cpi = ((1 + inf)^(1 / years) - 1) * 100,
+                 real = (ratio^(1 / years) - 1) * 100)
+      cat("  6. Average yearly change (compound): salary ", full_digits(yr$nominal), " %, CPI ", full_digits(yr$cpi),
+          " %, REAL ", full_digits(yr$real), " %\n", sep = "")
+    }
+    verdict <- if (ratio < 1) paste0("the purchasing power DECREASED by ", full_digits((1 - ratio) * 100), " %")
+    else if (ratio > 1) paste0("the purchasing power INCREASED by ", full_digits((ratio - 1) * 100), " %")
+    else "the purchasing power did not change"
+    cat("\n  ->", verdict, "\n")
+    final_box("REAL SALARY: ANSWER", c(
+      box_line("Salary index", 1 + nom),
+      box_line("CPI index", 1 + inf),
+      box_line("Real index", ratio),
+      box_line("REAL CHANGE (%)", chg),
+      box_line("Real value of 100 (money of the start)", 100 * ratio),
+      if (!is.null(yr)) box_line("Average yearly REAL change (%)", yr$real),
+      paste0("-> ", verdict)))
+    return(invisible(list(real_ratio = ratio, real_change_pct = chg, yearly = yr)))
+  }
+  if (is.null(salary) || is.null(cpi))
+    stop("Give salary_pct and cpi_pct (e.g. real_salary(50, 100)), or the tables salary = ... and cpi = ...")
+  n <- length(salary)
+  if (length(cpi) != n) stop("`salary` and `cpi` must have the same length.")
+  if (is.null(labels)) labels <- seq_len(n)
+  if (length(labels) != n) stop("`labels` must have one entry per period.")
+  pos <- if (base %in% labels) which(labels == base)[1] else base
+  if (is.na(pos) || pos < 1 || pos > n) stop("The base period is not in the data.")
+  cpi_ratio <- cpi / cpi[pos]
+  real <- salary / cpi_ratio
+  nom_idx <- salary / salary[pos] * 100
+  real_idx <- real / real[pos] * 100
+  tab <- data.frame(period = labels, salary = salary, cpi = cpi, cpi_ratio = cpi_ratio,
+                    real_salary = real, nominal_index = nom_idx, real_index = real_idx,
+                    real_change_pct = real_idx - 100)
+  report_title(paste0("REAL SALARY: SALARY vs CPI (base period = ", labels[pos], ")"))
+  report_section("GENERAL DATA")
+  report_line("Number of periods", n)
+  report_line("Base period", labels[pos])
+  cat("  FORMULAS: CPI ratio = CPI(t) / CPI(base);  real salary = salary(t) / CPI ratio;\n",
+      "            real index = real salary(t) / real salary(base) * 100\n", sep = "")
+  report_section("STEP BY STEP")
+  for (i in seq_len(n)) {
+    cat(sprintf("\n  %s:  CPI ratio = %s / %s = %s\n", labels[i], full_digits(cpi[i]), full_digits(cpi[pos]), full_digits(cpi_ratio[i])))
+    cat(sprintf("        real salary = %s / %s = %s\n", full_digits(salary[i]), full_digits(cpi_ratio[i]), full_digits(real[i])))
+    cat(sprintf("        real index = %s / %s * 100 = %s %%   (nominal index = %s %%)\n", full_digits(real[i]), full_digits(real[pos]),
+                full_digits(real_idx[i]), full_digits(nom_idx[i])))
+  }
+  report_section("SUMMARY TABLE")
+  print(tab, row.names = FALSE)
+  last <- n
+  chg <- real_idx[last] - 100
+  verdict <- if (chg < 0) paste0("the purchasing power DECREASED by ", full_digits(-chg), " % between ", labels[pos], " and ", labels[last])
+  else if (chg > 0) paste0("the purchasing power INCREASED by ", full_digits(chg), " % between ", labels[pos], " and ", labels[last])
+  else "the purchasing power did not change"
+  cat("\n  ->", verdict, "\n")
+  final_box(paste0("REAL SALARY: ANSWER (base ", labels[pos], ")"), c(
+    vapply(seq_len(n), function(i) paste0(labels[i], ":  real salary = ", full_digits(real[i]), "   real index = ", full_digits(real_idx[i]), " %"), character(1)),
+    "",
+    box_line(paste0("REAL CHANGE (%) from ", labels[pos], " to ", labels[last]), chg),
+    paste0("-> ", verdict)))
+  invisible(tab)
+}
+
+# -----------------------------------------------------------------------------
+# cpi_conversion(cpi, amount, year = "t", base = "base", amount_base = NULL,
+#                cpi_is_ratio = FALSE)
+# -----------------------------------------------------------------------------
+# WHAT IT DOES : ONE CALL FOR THE EXERCISE "Knowing that the CPI of the year 1998
+#                with respect to 1990 is 135 %: (1) the real value in 1990 of a
+#                product that cost 1000 in 1998; (2) the real value in 1998 of a
+#                product that cost 1000 in 1990". It does BOTH directions, step
+#                by step: the CPI, the inverse CPI, the real value in the base
+#                year (divide by the CPI) and the real value in the later year
+#                (multiply by the CPI = divide by the inverse CPI).
+# THE EASIEST WAY:
+#   cpi_conversion(cpi = 135, amount = 1000, year = 1998, base = 1990)
+# PARAMETERS   :
+#   cpi          : the CPI of the later year with respect to the base year, as the
+#                  exercise gives it: 135 for "135 %". (If you have it as a ratio, 1.35,
+#                  use cpi_is_ratio = TRUE.)
+#   amount       : the price / amount in the LATER year (1998) for part (1)
+#                  and, if `amount_base` is empty, also the price in the BASE year (1990)
+#                  for part (2) (in the exercise both are 1000).
+#   year         : the later year (only the label for the output), e.g. 1998.
+#   base         : the base year (only the label), e.g. 1990.
+#   amount_base  : (optional) the price in the BASE year for part (2) when it is not
+#                  the same number as `amount`.
+#   cpi_is_ratio : TRUE if you typed the CPI as a ratio (1.35) and not as a % (135).
+# RETURNS      : Invisibly, a list with cpi, inverse_cpi, real_in_base and real_in_year.
+# EXAMPLES     :
+#   cpi_conversion(cpi = 135, amount = 1000, year = 1998, base = 1990)
+#       # (1) 1000 of 1998 are 740.74... of 1990   (2) 1000 of 1990 are 1350 of 1998
+#   cpi_conversion(cpi = 135, amount = 1000, amount_base = 2500, year = 1998, base = 1990)
+# -----------------------------------------------------------------------------
+cpi_conversion <- function(cpi, amount, year = "t", base = "base", amount_base = NULL, cpi_is_ratio = FALSE) {
+  ratio <- if (cpi_is_ratio) cpi else cpi / 100
+  if (is.null(amount_base)) amount_base <- amount
+  inv <- 1 / ratio
+  real_base <- amount / ratio                 # (1) value of the year-t amount in money of the base year
+  real_year <- amount_base * ratio            # (2) value of the base-year amount in money of year t
+  report_title(paste0("CPI CONVERSION: ", year, " <-> ", base))
+  report_section("GENERAL DATA")
+  report_line(paste0("CPI of ", year, " with respect to ", base, " (%)"), ratio * 100)
+  report_line(paste0("Amount in ", year), amount)
+  report_line(paste0("Amount in ", base), amount_base)
+  cat("  RULE: to go from ", year, " back to ", base, " DIVIDE by the CPI; to go from ", base, " to ", year,
+      " MULTIPLY by the CPI.\n", sep = "")
+  report_section(paste0("STEP 1: the CPI as a ratio and its inverse"))
+  cat("  CPI(", year, "/", base, ") = ", full_digits(ratio * 100), " / 100 = ", full_digits(ratio), "\n", sep = "")
+  cat("  INVERSE: CPI(", base, "/", year, ") = 1 / ", full_digits(ratio), " = ", full_digits(inv),
+      "   (= ", full_digits(inv * 100), " %)\n", sep = "")
+  cat("  Prices ", if (ratio >= 1) "ROSE" else "FELL", " ", full_digits(abs(ratio - 1) * 100), " % between ", base, " and ", year, ".\n", sep = "")
+  report_section(paste0("STEP 2  (1): real value in ", base, " of ", full_digits(amount), " of ", year))
+  cat("  FORMULA : real value in ", base, " = amount in ", year, " / CPI(", year, "/", base, ")\n", sep = "")
+  cat("  NUMBERS : ", full_digits(amount), " / ", full_digits(ratio), " = ", full_digits(real_base), "\n", sep = "")
+  cat("  -> ", full_digits(amount), " of ", year, " are worth ", full_digits(real_base), " in money of ", base,
+      "  (", if (real_base < amount) "less" else "more", ": prices ", if (ratio >= 1) "rose" else "fell", ")\n", sep = "")
+  report_section(paste0("STEP 3  (2): real value in ", year, " of ", full_digits(amount_base), " of ", base))
+  cat("  FORMULA : real value in ", year, " = amount in ", base, " / CPI(", base, "/", year, ") = amount in ", base, " * CPI(", year, "/", base, ")\n", sep = "")
+  cat("  NUMBERS : ", full_digits(amount_base), " / ", full_digits(inv), " = ", full_digits(amount_base), " * ", full_digits(ratio),
+      " = ", full_digits(real_year), "\n", sep = "")
+  cat("  -> ", full_digits(amount_base), " of ", base, " are worth ", full_digits(real_year), " in money of ", year,
+      "  (", if (real_year > amount_base) "more" else "less", ": prices ", if (ratio >= 1) "rose" else "fell", ")\n", sep = "")
+  final_box("CPI CONVERSION: ANSWER", c(
+    box_line(paste0("CPI(", year, "/", base, ")"), ratio),
+    box_line(paste0("Inverse CPI(", base, "/", year, ")"), inv),
+    "",
+    paste0("(1) ", full_digits(amount), " of ", year, " = ", full_digits(real_base), " in ", base),
+    paste0("(2) ", full_digits(amount_base), " of ", base, " = ", full_digits(real_year), " in ", year)))
+  invisible(list(cpi = ratio, inverse_cpi = inv, real_in_base = real_base, real_in_year = real_year))
 }
